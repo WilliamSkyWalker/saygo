@@ -3,6 +3,9 @@
 (() => {
   const messages = {
   "zh": {
+    "primaryAction": "开始使用 <span aria-hidden=\"true\">↗</span>",
+    "demoAction": "<span aria-hidden=\"true\">▶</span> 看它如何工作",
+    "stageNote": "从一句话，到屏幕上的行动。",
     "platformLabel": "平台支持与计划",
     "platformTitle": "从桌面到手机，持续扩展。",
     "platformIntro": "面向 Windows、Windows WSL 和 macOS，覆盖 Android、iOS 真机与模拟器的设备操控与调试。",
@@ -39,7 +42,7 @@
     "quickstartTitle": "从第一条命令开始。",
     "quickstartIntro": "继续使用熟悉的工具。<br>把屏幕上的操作，交给 AI。",
     "stepInstall": "安装插件",
-    "setupRequirementsPypi": "准备好 Python 3.10+、pipx 和对应的 AI 客户端，在终端运行上方命令。",
+    "setupRequirementsPypi": "准备好 Python 3.10+、pipx 和对应的 AI 客户端，在终端运行安装命令。",
     "installerDoes": "安装器会完成",
     "installerDetail": "创建独立运行环境，接入 MCP 与操作 Skill。",
     "chooseCopy": "选择工具并复制命令 <span aria-hidden=\"true\">↑</span>",
@@ -75,10 +78,13 @@
     "copySuccess": "安装命令已复制。",
     "copyManual": "请手动复制",
     "copyFallback": "自动复制不可用，已选中命令，请按 Ctrl+C 或 Command+C 复制。",
-    "setupRequirementsSource": "准备好 Python 3.10+、Git 和对应的 AI 客户端，在终端运行上方命令。",
+    "setupRequirementsSource": "准备好 Python 3.10+、Git 和对应的 AI 客户端，在终端运行安装命令。",
     "installNoteSource": "克隆源码后运行安装器，接入 AI 工具。"
   },
   "en": {
+    "primaryAction": "Get started <span aria-hidden=\"true\">↗</span>",
+    "demoAction": "<span aria-hidden=\"true\">▶</span> See it in action",
+    "stageNote": "From a few words to action on screen.",
     "platformLabel": "PLATFORM SUPPORT & ROADMAP",
     "platformTitle": "From desktops to phones.",
     "platformIntro": "Our goal is device control and debugging across Windows, Windows WSL, and macOS, with physical Android and iOS devices, Android emulators, and iOS simulators.",
@@ -115,7 +121,7 @@
     "quickstartTitle": "Start with one command.",
     "quickstartIntro": "Keep using the tools you know.<br>Let AI handle the actions on screen.",
     "stepInstall": "Install the plugin",
-    "setupRequirementsPypi": "With Python 3.10+, pipx, and your AI client ready, run the commands above in a terminal.",
+    "setupRequirementsPypi": "With Python 3.10+, pipx, and your AI client ready, run the installation commands in a terminal.",
     "installerDoes": "THE INSTALLER WILL",
     "installerDetail": "Create an isolated runtime and connect the MCP server and device skill.",
     "chooseCopy": "Choose a tool and copy commands <span aria-hidden=\"true\">↑</span>",
@@ -151,7 +157,7 @@
     "copySuccess": "Installation commands copied.",
     "copyManual": "Copy manually",
     "copyFallback": "Automatic copying is unavailable. The commands are selected; press Ctrl+C or Command+C to copy.",
-    "setupRequirementsSource": "With Python 3.10+, Git, and your AI client ready, run the commands above in a terminal.",
+    "setupRequirementsSource": "With Python 3.10+, Git, and your AI client ready, run the installation commands in a terminal.",
     "installNoteSource": "Clone the source and run the installer to connect your AI tools. "
   }
 };

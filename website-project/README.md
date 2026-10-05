@@ -2,7 +2,7 @@
 
 面向 AI 工具用户和开发者的静态官网，域名 https://saygo.work/。
 
-当前版本包括首屏安装入口、现有 QQ 音乐实机视频和快速接入三个步骤。采用白底、浅灰分区和橙色强调。
+当前版本采用石墨黑背景、橙色强调、细网格和大字号排版。首屏突出产品介绍与 QQ 音乐实机视频；快速接入区集中展示安装命令和三个接入步骤。支持移动端布局与减少动态效果偏好。
 
 ## 本地预览
 
@@ -20,7 +20,7 @@ python3 -m http.server 8080 --bind 127.0.0.1
 
 ## 安装入口
 
-首屏支持 Codex / Claude Code 和 macOS、Linux、WSL / Windows 切换。默认使用已发布的 PyPI 包，显示 `pipx install` 与指定商店插件 ID 的 `saygo setup`。浏览器安装入口指向 Chrome 网上应用店的 Saygo Browser（`ehomcchjfomfkcmbeinlcmpbaamdhfbo`），中英文文案保持一致。在 `site-config.js` 中设置 `installMode: "source"` 可切换回源码安装。复制使用 Clipboard API，失败时选中命令供手动复制。
+快速接入区支持 Codex / Claude Code 和 macOS、Linux、WSL / Windows 切换。默认使用已发布的 PyPI 包，显示 `pipx install` 与指定商店插件 ID 的 `saygo setup`。浏览器安装入口指向 Chrome 网上应用店的 Saygo Browser（`ehomcchjfomfkcmbeinlcmpbaamdhfbo`），中英文文案保持一致。在 `site-config.js` 中设置 `installMode: "source"` 可切换回源码安装。复制使用 Clipboard API，失败时选中命令供手动复制。
 
 ## 视频
 
