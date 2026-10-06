@@ -12,15 +12,15 @@ saygo setup --client both
 # Or --client claude / --client codex
 ```
 
-The installer creates an isolated Python environment, installs MCP dependencies, and registers a native `saygo-device@saygo-managed` plugin using each client's plugin CLI. The plugin includes the shared skill and an MCP server with an absolute interpreter path. It works from ordinary project directories without `SAYGO_HOME`, `PYTHONPATH`, manual MCP configuration, or a prompt asking the agent to read a file. Nothing is downloaded during MCP startup.
+PyPI setup reuses its installed Python environment and registers a native `saygo-device@saygo-managed` plugin using each client's plugin CLI. The plugin includes the shared skill and an MCP server with an absolute interpreter path. It works from ordinary project directories without `SAYGO_HOME`, `PYTHONPATH`, manual MCP configuration, or a prompt asking the agent to read a file. Nothing is downloaded during MCP startup.
 
 Start a new client session after installation and say: **“Use Saygo to inspect my connected devices, then help me operate a test application.”** The agent discovers sessions, connects the requested target and follows the bundled observation/action protocol. Claude installation adds Saygo-specific tool allow rules by default. Qoder/QoderCN installation includes the MCP entry, shared Skill and service trust. Codex uses the plugin-specific approval policy described in the distribution guide.
 
 MCP does not support Playwright. Browser tasks use the extension backend; saved Playwright sessions are listed separately as unavailable through MCP. Use `--install-browser` only to add Playwright/Chromium for separate CLI work, or `--mobile` to add mobile Python dependencies. Android/iOS toolchains, application login and OS input permissions remain platform setup requirements. Native Windows/macOS installation is not yet live-verified; WSL installation and both clients' plugin ingestion are tested. No model API key is required by Saygo.
 
-For source development, run `python3 scripts/install_agent_plugin.py --client both` from a checkout. Versioned GitHub release installers are another option and verify their source archives; the PyPI route bundles the installer and needs no repository clone.
+For source development, run `python3 scripts/install_development.py` from a checkout. Versioned GitHub release installers are another option and verify their source archives; the PyPI route bundles the installer and needs no repository clone.
 
-Managed files live under `~/.local/share/saygo/agent-plugin`. Run `pipx upgrade saygo-agent-control`, then `saygo setup --client both` (or your selected client) to install a new runtime and refresh the plugin cache. Existing runtimes are retained for running clients; session/task data stays under `~/.saygo`. `--prepare-only` prepares files without registering clients. `--root PATH` selects another managed installation directory.
+Managed files live under `~/.local/share/saygo/agent-plugin`. Run `pipx upgrade saygo-agent-control`, then restart your Agent client to load the new package. Older copied-runtime installations need one setup migration after upgrading to a release containing this fix. Existing runtimes are retained for running clients; session/task data stays under `~/.saygo`. `--prepare-only` prepares files without registering clients. `--root PATH` selects another managed installation directory.
 
 Do not enable an older `saygo-device@saygo-plugins` installation or a manually configured Saygo MCP server alongside the managed plugin: use one integration per client to avoid duplicate tools. The installer does not remove unrelated or existing client configurations.
 

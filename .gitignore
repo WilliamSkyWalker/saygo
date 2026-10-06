@@ -195,6 +195,10 @@ tests/*_demo/reports/
 
 # Saygo run artifacts (报告/截图/缓存)
 .saygo_runs/
+.saygo-dev/
+.codex/config.toml
+.codex/config.toml.before-saygo
+.agents/skills/saygo-device/
 
 # saygo.mcp.client 的本地外部 MCP 配置（含 token）— .example 文件入库
 .saygo/mcp_clients.json

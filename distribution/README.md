@@ -19,9 +19,9 @@ saygo setup --client codex
 Use `--client claude`, `both`, `qoder`, `qodercn`, or `all` for other integrations.
 After setup, load the browser extension from the path printed by the installer,
 click **Connect local bridge**, and restart the Agent client. Update with
-`pipx upgrade saygo-agent-control`, then rerun `saygo setup` for your chosen client.
-The CLI package and the managed runtime are separate; upgrading the package alone
-does not refresh an existing client integration.
+`pipx upgrade saygo-agent-control`, then restart your Agent client. PyPI setup binds MCP to
+the same installed environment. Existing installations made before this change need a
+one-time setup migration using a release that contains this fix.
 
 ## Install from GitHub release assets
 
@@ -155,7 +155,7 @@ ZIP (without development key), SHA256SUMS and release metadata. Source bundling
 uses a narrow allowlist; no user session state, credentials or device captures are
 included. `--prepare-only --client both --root /tmp/saygo-package-check` builds
 client bundles without registering clients/hosts. Running from the checkout is
-also supported via `python3 scripts/install_agent_plugin.py`.
+available for Codex via `python3 scripts/install_development.py` (project scope only).
 
 Push a tag matching `distribution/release.json` to run regression checks, publish
 GitHub release artifacts and automatically submit the store ZIP for review. Google
@@ -259,3 +259,18 @@ claimed verified by the CLI integration.
 References: [Claude permissions](https://code.claude.com/docs/en/permissions),
 [Qoder MCP configuration](https://docs.qoder.com/cli/mcp-reference),
 [Qoder Skills](https://docs.qoder.com/cli/Skills).
+
+## Development is project-local
+
+Run `python3 scripts/install_development.py` in a Saygo checkout (`--mobile` adds mobile dependencies).
+This provisions `.saygo-dev/`, writes only the checkout's `.codex/config.toml`, disables the user
+Saygo plugin in that project, and installs a local device skill. The development entry point
+refuses to start outside this checkout. Development sessions use `.saygo-dev/state`; user sessions
+remain in `~/.saygo`. It never registers a native host or changes the store extension connection.
+Other directories keep the user plugin and the installed release package.
+
+`--source` may no longer install a development checkout into the global user plugin. The private
+`--package-python` setup parameter validates a non-editable release package before registering it.
+The normal user command is simply `saygo setup --client codex`; custom extension IDs are explicit overrides.
+
+Codex project plugin scoping follows [the official project configuration documentation](https://developers.openai.com/plugins/build/plugins).

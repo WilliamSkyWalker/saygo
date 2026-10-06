@@ -57,15 +57,18 @@ After publication, verify from outside the checkout:
 ```sh
 pipx install 'saygo-agent-control[mcp]'
 saygo setup --help
-saygo setup --client codex --extension-id ehomcchjfomfkcmbeinlcmpbaamdhfbo
+saygo setup --client codex
 ```
 
 Install [Saygo Browser from the Chrome Web Store](https://chromewebstore.google.com/detail/ehomcchjfomfkcmbeinlcmpbaamdhfbo), then click
-**Connect local bridge** in its popup. The explicit setup ID also switches old
-development installations to the store host registration.
+**Connect local bridge** in its popup. Store registration is the default; ordinary users do not supply an extension ID.
 
-The website uses `installMode: "pypi"`. The pipx application and managed plugin runtime are separate:
-`pipx upgrade saygo-agent-control` followed by `saygo setup` updates both. The
-optional managed runtime auto-updater still uses GitHub releases.
+PyPI setup uses the installed package interpreter directly, so `pipx upgrade saygo-agent-control`
+and an Agent client restart update MCP too. No repeated setup or copied runtime is needed.
+Installations created before this change need one `saygo setup --client codex` migration
+(or their selected client), using a package release containing this fix.
+Native host files are staged on the next MCP startup after a package update. A connected host
+keeps running until the user reconnects; Saygo never forces a browser disconnect.
+Standalone GitHub installers retain their managed update channel.
 
 References: [PyPA publishing guide](https://packaging.python.org/en/latest/guides/publishing-package-distribution-releases-using-github-actions-ci-cd-workflows/).

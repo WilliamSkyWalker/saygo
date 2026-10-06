@@ -15,6 +15,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.request
 
@@ -74,6 +75,12 @@ def fetch(url, timeout=5):
 
 def current(root):
     installed = read(root/'installation.json')
+    if installed.get('runtime_mode') == 'package':
+        number = subprocess.check_output(
+            [installed['python'], '-I', '-c',
+             'from importlib.metadata import version; print(version("saygo-agent-control"))'],
+            text=True, timeout=10).strip()
+        return {**installed, 'version': number}
     selected = read(root/'active-runtime.json')
     if selected and Path(selected.get('python', '')).is_file():
         return {**installed, **selected}
@@ -106,6 +113,11 @@ def check(root, force=False):
 
 
 def notice(root):
+    installed = current(Path(root))
+    if installed.get('runtime_mode') == 'package':
+        return {'current': installed['version'], 'runtime_mode': 'package',
+                'automatic': False, 'channel': 'stable',
+                'message': 'MCP follows the installed package. Upgrade with pipx; restart the Agent client to load it.'}
     state = read(Path(root)/'update-state.json')
     config = read(Path(root)/'updates.json')
     result = {'current': current(Path(root)).get('version'), 'automatic': config.get('automatic', False), 'channel': config.get('channel', 'stable')}
@@ -246,8 +258,40 @@ def run_server(python, args, env):
         process.wait()
 
 
+def synchronize_package_bridge(root, installed):
+    """Stage native-host files for the next browser connection; never stop a host."""
+    bridge = installed.get('bridge')
+    if not bridge or installed.get('browser') == 'none':
+        return
+    try:
+        with lock(root/'install.lock'):
+            latest = read(root/'installation.json')
+            if latest.get('version') == installed['version']:
+                return
+            command = [installed['python'], '-I', '-m', 'saygo.integrations.browser_setup',
+                       '--extension-id', installed['extension_id'],
+                       '--browser', installed.get('browser', 'chrome'),
+                       '--directory', bridge['directory'], '--save-default']
+            result = subprocess.check_output(command, text=True, timeout=120)
+            latest.update(version=installed['version'], bridge=json.loads(result))
+            write(root/'installation.json', latest)
+            print('[Saygo] Native host files updated. An already connected browser keeps '
+                  'its running host until the user reconnects.', file=sys.stderr)
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+        print('[Saygo] Native host update pending: ' + str(exc), file=sys.stderr)
+
+
 def serve(root, args):
     root = Path(root)
+    if read(root/'installation.json').get('runtime_mode') == 'package':
+        # No source-checkout discovery and no managed-runtime pointer fallback.
+        # The same venv that pipx upgrades is used at every client startup.
+        installed = current(root)
+        # WSL/Windows provisioning must not consume the MCP startup deadline.
+        threading.Thread(target=synchronize_package_bridge, args=(root, installed),
+                         daemon=True, name='saygo-package-bridge').start()
+        return run_server(installed['python'], args,
+                          {**os.environ, 'SAYGO_INSTALL_ROOT': str(root)})
     marker = root/('server-'+str(os.getpid())+'.lock')
     with contextlib.ExitStack() as stack:
         # Serialize selection and marking so two starting clients cannot update each other.
@@ -300,6 +344,15 @@ def main(argv=None):
         parser.error('No managed installation found; run the current installer first')
     if args.serve:
         return serve(root, rest)
+    if installed.get('runtime_mode') == 'package':
+        if rest:
+            parser.error('Unknown arguments: ' + ' '.join(rest))
+        if args.apply or args.auto or args.channel:
+            parser.error('This installation follows pipx. Run pipx upgrade saygo-agent-control, '
+                         'then restart the Agent client; setup is not required again.')
+        print(json.dumps({'current': current(root)['version'], 'runtime_mode': 'package',
+                          'message': 'Updates follow pipx upgrade saygo-agent-control.'}))
+        return 0
     if rest: parser.error('Unknown arguments: '+' '.join(rest))
     if args.background:
         with lock(root/'download.lock'):

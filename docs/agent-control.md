@@ -12,11 +12,11 @@ saygo setup --client codex
 # Or: saygo setup --client claude / both / qoder / qodercn / all
 ```
 
-No repository clone or manual MCP configuration is needed. `saygo setup` uses the installer, Skill and browser extension bundled with the installed package, creates an isolated runtime, and registers your client integration. Follow its instructions to load the Chrome/Edge extension, click **Connect local bridge**, then restart the AI client. See [plugin installation](../plugins/saygo-device/README.md) for platform prerequisites.
+No repository clone or manual MCP configuration is needed. `saygo setup` uses the installer, Skill and browser extension bundled with the installed package, reuses the installed package environment, and registers your client integration. Follow its instructions to load the Chrome/Edge extension, click **Connect local bridge**, then restart the AI client. See [plugin installation](../plugins/saygo-device/README.md) for platform prerequisites.
 
-To upgrade, run `pipx upgrade saygo-agent-control`, then rerun `saygo setup --client codex` (or your selected client). This refreshes the managed integration as well as the CLI. Use `saygo setup --help` for mobile dependencies, browser choice, update and uninstall options.
+To upgrade, run `pipx upgrade saygo-agent-control`, then restart the Agent client. MCP follows the same package environment; older copied-runtime installations need one setup migration using a release containing this fix. Use `saygo setup --help` for mobile dependencies, browser choice, update and uninstall options.
 
-For source development, use `python3 scripts/install_agent_plugin.py --client both` from a checkout. For direct Python API work, install the package in your own virtual environment. The `browser` extra and Playwright are only for separate CLI browser automation; the browser-extension MCP setup needs the `mcp` extra and no Playwright installation. Other extras include `mobile`, `selenium`, `windows`, `mac`, and `qa`. Mobile device toolchains and desktop permissions remain separate setup steps.
+For source development, use `python3 scripts/install_development.py` from a checkout. For direct Python API work, install the package in your own virtual environment. The `browser` extra and Playwright are only for separate CLI browser automation; the browser-extension MCP setup needs the `mcp` extra and no Playwright installation. Other extras include `mobile`, `selenium`, `windows`, `mac`, and `qa`. Mobile device toolchains and desktop permissions remain separate setup steps.
 
 An MCP client can start `saygo-mcp --profile device` using the environment's executable path. Prefer `saygo setup` for supported clients so it configures the runtime and paths together.
 

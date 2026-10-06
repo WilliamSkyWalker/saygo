@@ -347,6 +347,7 @@ def main(argv=None):
     parser.add_argument('--client', choices=['codex', 'claude', 'qoder', 'qodercn', 'both', 'all', 'auto'], default='auto',
                         help='auto detects installed clients; both = Claude+Codex; all = all four')
     parser.add_argument('--source', help='Explicit source checkout (development only)')
+    parser.add_argument('--package-python', help=argparse.SUPPRESS)
     parser.add_argument('--archive', help='Local source ZIP, checked against this release installer SHA256')
     parser.add_argument('--root', type=Path, default=Path.home() / '.local/share/saygo/agent-plugin')
     parser.add_argument('--mobile', action='store_true', help='Also install mobile Python dependencies')
@@ -361,6 +362,10 @@ def main(argv=None):
                         help='Automatically update compatible runtimes at the next idle client startup')
     parser.add_argument('--update-channel', choices=['stable', 'beta'], default=None)
     args = parser.parse_args(argv)
+    local_source = not RELEASE and (Path(__file__).resolve().parents[1]/'pyproject.toml').is_file()
+    if not args.uninstall and not args.package_python and (args.source or (local_source and not args.archive)):
+        parser.error('Source checkouts cannot replace a user installation. '
+                     'Use scripts/install_development.py for project-local development.')
     if args.extension_id and not re.fullmatch('[a-p]{32}', args.extension_id):
         parser.error('--extension-id must contain exactly 32 letters a-p')
     if sys.version_info < (3, 10):
@@ -410,12 +415,30 @@ def main(argv=None):
         with tempfile.TemporaryDirectory(prefix='saygo-install-') as temporary:
             source = source_root(args.source, Path(temporary), args.archive)
             extra_string = ','.join(extras)
-            python = prepare_runtime(source, root, extra_string)
+            if args.package_python:
+                python = Path(args.package_python).expanduser().absolute()
+                # Refuse a checkout/editable package as a global user runtime.
+                code = ('import json, pathlib, importlib.metadata as m; '
+                        'd=m.distribution("saygo-agent-control"); '
+                        'u=json.loads(d.read_text("direct_url.json") or "{}"); '
+                        'assert not u.get("dir_info", {}).get("editable"), "Editable install is development-only"; '
+                        'import saygo, mcp; '
+                        'assert (pathlib.Path(saygo.__file__).parent/"_setup_source.zip").is_file(), "Release package required"; '
+                        'print(d.version)')
+                installed_version = subprocess.check_output([str(python), '-I', '-c', code], text=True).strip()
+                expected_version = json.loads((source/'distribution/release.json').read_text())['version']
+                if installed_version != expected_version:
+                    raise ValueError('Package version and setup resources differ')
+                if len(extras) > 1:
+                    run([python, '-m', 'pip', 'install', '--disable-pip-version-check',
+                         f'saygo-agent-control[{extra_string}]=={installed_version}'])
+            else:
+                python = prepare_runtime(source, root, extra_string)
             if args.install_browser:
                 run([python, '-m', 'playwright', 'install', 'chromium'])
             market = prepare_plugin(source, root, python, fingerprint(source, extra_string), config_file)
             release = json.loads((source / 'distribution/release.json').read_text())
-            extension_id = args.extension_id or previous.get('extension_id') or release.get('store_extension_id') or release['development_extension_id']
+            extension_id = args.extension_id or release['store_extension_id']
             bridge = previous.get('bridge') if not args.prepare_only else None
             record = {'python': str(python), 'marketplace': str(market),
                       'clients': previous.get('clients', []) if not args.prepare_only else [],
@@ -423,6 +446,8 @@ def main(argv=None):
                       'version': release['version'], 'extension_id': extension_id,
                       'config_file': str(config_file) if config_file else None,
                       'mobile': args.mobile, 'install_browser': args.install_browser}
+            record['runtime_mode'] = 'package' if args.package_python else 'managed'
+            record['browser'] = args.browser
             spec = importlib.util.spec_from_file_location('saygo_update_metadata', source/'saygo/updates.py')
             updater = importlib.util.module_from_spec(spec); spec.loader.exec_module(updater)
             record['compatibility'] = updater.compatibility(source)
@@ -445,6 +470,7 @@ def main(argv=None):
             shutil.copytree(source / 'extensions/saygo-browser', extension, dirs_exist_ok=True)
             write_json(root / 'installation.json', record)
             (root/'active-runtime.json').unlink(missing_ok=True)
+            (root/'pending-runtime.json').unlink(missing_ok=True)
             (root/'update-state.json').unlink(missing_ok=True)
             updates = json.loads((root/'updates.json').read_text()) if (root/'updates.json').exists() else {'automatic': False, 'channel': 'stable'}
             if args.auto_update is not None: updates['automatic'] = args.auto_update

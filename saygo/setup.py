@@ -39,10 +39,21 @@ def main(argv=None):
             spec = importlib.util.spec_from_file_location('saygo_setup_installer', source / 'scripts/install_agent_plugin.py')
             installer = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(installer)
+            if any(arg in ('--help', '-h', '--uninstall') for arg in arguments):
+                return installer.main(arguments)
             # Explicit developer sources/archives are still validated by the installer.
             explicit = any(arg in ('--source', '--archive') or arg.startswith(('--source=', '--archive='))
                            for arg in arguments)
-            return installer.main(arguments if explicit else ['--source', str(source), *arguments])
+            if explicit:
+                return installer.main(arguments)
+            if (Path(__file__).resolve().parent / '_setup_source.zip').is_file():
+                # Keep the interpreter path inside the venv (do not resolve its symlink).
+                # pipx upgrades this environment in place; MCP must follow it.
+                return installer.main(['--source', str(source), '--package-python',
+                                       sys.executable, *arguments])
+            raise ValueError('Source checkout setup is project-only. Run '
+                             'python scripts/install_development.py; use the installed '
+                             'saygo command for the user installation.')
     except (OSError, ValueError, subprocess.CalledProcessError) as exc:
         print(f'Saygo setup failed: {exc}', file=sys.stderr)
         return 1

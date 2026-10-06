@@ -16,10 +16,9 @@ function resetCopy() {
 }
 function updateCommand() {
   commandRevision += 1;
-  const python = os.value === "windows" ? "py -3" : "python3";
   command.textContent = config.installMode === "pypi"
-    ? `pipx install "saygo-agent-control[mcp]"\nsaygo setup --client ${selectedClient} --extension-id ehomcchjfomfkcmbeinlcmpbaamdhfbo`
-    : `git clone https://github.com/WilliamSkyWalker/saygo.git\ncd saygo\n${python} scripts/install_agent_plugin.py --client ${selectedClient} --extension-id ehomcchjfomfkcmbeinlcmpbaamdhfbo`;
+    ? `pipx install "saygo-agent-control[mcp]"\nsaygo setup --client ${selectedClient}`
+    : `git clone https://github.com/WilliamSkyWalker/saygo.git\ncd saygo\npipx install "./[mcp]"\nsaygo setup --client ${selectedClient}`;
   clients.forEach(button => button.setAttribute("aria-pressed", String(button.dataset.client === selectedClient)));
   resetCopy();
 }
