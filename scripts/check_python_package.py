@@ -44,8 +44,12 @@ def check(wheel):
         market = managed / 'marketplace/plugins/saygo-device'
         server = json.loads((market / '.mcp.json').read_text())['mcpServers']['saygo']
         assert installed['runtime_mode'] == 'package'
-        assert Path(installed['python']) == python.absolute()
-        assert Path(server['command']) == python.absolute()
+        # macOS exposes temporary directories through both /var and /private/var.
+        # Check the interpreter's identity and venv directory, not path spelling.
+        for executable in (installed['python'], server['command']):
+            candidate = Path(executable)
+            assert candidate.samefile(python)
+            assert candidate.parent.resolve() == python.parent.resolve()
         assert (market / 'skills/device/SKILL.md').is_file()
         assert (managed / 'browser-extension/manifest.json').is_file()
         run([server['command'], '-I', '-c', 'import saygo.setup; from saygo.mcp import server'])
