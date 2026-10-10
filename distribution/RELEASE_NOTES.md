@@ -1,4 +1,13 @@
-# Saygo 0.4.13 — Reliable inactive-tab capture
+# Saygo 0.4.14 — Package installation verification
+
+This Python package release includes Saygo Browser 0.4.13 and corrects the
+cross-platform installation check for package-based runtimes. The check verifies
+that setup and repeated setup use the installed wheel's interpreter and preserve
+the MCP command, without requiring a second copied runtime directory.
+
+Browser extension 0.4.13 is already submitted for Chrome Web Store review; this
+release does not change or resubmit its contents. The earlier Python 0.4.13 upload
+was blocked by the obsolete runtime-directory assertion before publication.
 
 Inactive tabs could return one screenshot and then stall in Chrome's screenshot
 interface, preventing the next scroll from being dispatched. Screenshot requests

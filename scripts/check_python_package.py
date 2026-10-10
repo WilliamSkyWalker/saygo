@@ -43,13 +43,19 @@ def check(wheel):
         assert installed['prepared_only'] and not installed['clients'] and installed['bridge'] is None
         market = managed / 'marketplace/plugins/saygo-device'
         server = json.loads((market / '.mcp.json').read_text())['mcpServers']['saygo']
-        assert Path(server['command']).is_file()
+        assert installed['runtime_mode'] == 'package'
+        assert Path(installed['python']) == python.absolute()
+        assert Path(server['command']) == python.absolute()
         assert (market / 'skills/device/SKILL.md').is_file()
         assert (managed / 'browser-extension/manifest.json').is_file()
         run([server['command'], '-I', '-c', 'import saygo.setup; from saygo.mcp import server'])
-        # Repeating setup should reuse the same runtime, not create a fresh one.
+        # Package installs use the wheel's interpreter, including on repeat setup.
         run([cli, 'setup', '--client', 'both', '--prepare-only', '--browser', 'none', '--root', managed])
-        assert len(list((managed / 'runtimes').iterdir())) == 1
+        repeated = json.loads((managed / 'installation.json').read_text())
+        assert repeated['runtime_mode'] == 'package'
+        assert repeated['python'] == installed['python']
+        assert json.loads((market / '.mcp.json').read_text())['mcpServers']['saygo'] == server
+        assert not (managed / 'runtimes').exists()
         print('Wheel install, setup, packaged resources, MCP import and repeat setup: passed')
 
 
