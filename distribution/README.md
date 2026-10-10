@@ -140,9 +140,9 @@ Browser extension versions come from `extensions/saygo-browser/manifest.json`
 and are independent of the Python package version. Only change the extension
 version when its files change. Build an extension-only upload with
 `python3 scripts/build_release.py --extension-only --out dist/browser-store`.
-The store item ID is `ehomcchjfomfkcmbeinlcmpbaamdhfbo`. Version 0.4.8 is public;
-0.4.12 was submitted for review on 2026-10-03. Use the Chrome Web Store status
-workflow for current status. Existing development installations switch through
+The store item ID is `ehomcchjfomfkcmbeinlcmpbaamdhfbo`. Extension 0.4.13 contains
+the background capture repair. Use the Chrome Web Store status workflow for
+current publication and review status. Existing development installations switch through
 the explicit setup command above.
 
 

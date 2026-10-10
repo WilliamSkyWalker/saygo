@@ -39,6 +39,9 @@ let inputPending = false;
 const viewportPending = new Map();
 const captureHistory = new Map();
 const captureDocuments = new Map();
+// Short-lived screencasts keep the compositor producing frames for hidden tabs.
+// Images still come exclusively from Page.captureScreenshot.
+const captureStreams = new Map();
 const debugStarted = Date.now();
 const commandStats = new Map();
 const READ_OPERATIONS = new Set(["pages", "metadata", "diagnose", "size", "screenshot", "network_read"]);
@@ -140,6 +143,7 @@ async function detachAll() {
   network.reset(); networkPaused.clear();
   await Promise.all([...attached].map(id => chrome.debugger.detach({tabId:id}).catch(() => {})));
   attached.clear();
+  captureStreams.clear();
 }
 async function connect() {
   if (port) return;
@@ -284,7 +288,7 @@ async function execute(operation, args = {}, trace = {}) {
   if (operation === "diagnose") {
     return {capture_mode:"cdp_surface", sampled_at_ms:Date.now(), page_id:args.page_id, ...await captureState(tabId),
       debug:{worker_started_at_ms:debugStarted, worker_uptime_ms:Date.now()-debugStarted,
-        pending_captures:viewportPending.size, input_pending:inputPending,
+        pending_captures:viewportPending.size, active_capture_streams:captureStreams.size, input_pending:inputPending,
         attached_tabs:attached.size, commands:Object.fromEntries(commandStats)},
       last_capture:captureStatus(captureHistory.get(args.page_id)),
       user_notice:captureNotice(captureHistory.get(args.page_id)),
@@ -336,24 +340,57 @@ async function execute(operation, args = {}, trace = {}) {
     // Showing Chrome's debugger banner can resize its viewport. Observation must
     // not activate tabs, focus windows or restore a minimized window.
     await new Promise(resolve => setTimeout(resolve, 200));
-    for (let attempt = 0; attempt < 3; attempt++) {
+    if (operation === "size") {
+      const {cssVisualViewport:v} = await command(tabId, "Page.getLayoutMetrics");
       checkCapture();
-      const metrics = await command(tabId, "Page.getLayoutMetrics");
-      checkCapture();
-      const view = metrics.cssVisualViewport;
-      const size = [Math.round(view.clientWidth), Math.round(view.clientHeight)];
-      if (operation === "size") return size;
-      const shot = await command(tabId, "Page.captureScreenshot", {
-        format:"png", captureBeyondViewport:false,
-        clip:{x:view.pageX, y:view.pageY, width:view.clientWidth, height:view.clientHeight, scale:1}
-      });
-      checkCapture();
-      const after = (await command(tabId, "Page.getLayoutMetrics")).cssVisualViewport;
-      checkCapture();
-      if (after.clientWidth === view.clientWidth && after.clientHeight === view.clientHeight &&
-          after.pageX === view.pageX && after.pageY === view.pageY) return {data:shot.data, size};
+      return [Math.round(v.clientWidth), Math.round(v.clientHeight)];
     }
-    throw new Error("Viewport changed during screenshot; observe again");
+    const stream = {ticket};
+    let started = false, cleanup;
+    const stopStream = () => {
+      // If start is still pending, its eventual completion performs cleanup.
+      if (!started) return Promise.resolve();
+      return cleanup ||= (async () => {
+        try {
+          if (ticket === generation && attached.has(tabId) && captureStreams.get(tabId) === stream)
+            await cdp(tabId, "Page.stopScreencast");
+        } finally {
+          if (captureStreams.get(tabId) === stream) captureStreams.delete(tabId);
+        }
+      })();
+    };
+    trace.onTimeout = () => { void stopStream().catch(() => {}); };
+    try {
+      checkCapture();
+      captureStreams.set(tabId, stream);
+      // A hidden page can answer layout queries while screenshot waits forever
+      // for a compositor frame. A scoped screencast wakes rendering without
+      // activating a tab/window or changing the screenshot's viewport mapping.
+      await command(tabId, "Page.startScreencast", {format:"png"});
+      started = true;
+      checkCapture();
+      for (let attempt = 0; attempt < 3; attempt++) {
+        checkCapture();
+        const metrics = await command(tabId, "Page.getLayoutMetrics");
+        checkCapture();
+        const view = metrics.cssVisualViewport;
+        const size = [Math.round(view.clientWidth), Math.round(view.clientHeight)];
+        const shot = await command(tabId, "Page.captureScreenshot", {
+          format:"png", captureBeyondViewport:false,
+          clip:{x:view.pageX, y:view.pageY, width:view.clientWidth, height:view.clientHeight, scale:1}
+        });
+        checkCapture();
+        const after = (await command(tabId, "Page.getLayoutMetrics")).cssVisualViewport;
+        checkCapture();
+        if (after.clientWidth === view.clientWidth && after.clientHeight === view.clientHeight &&
+            after.pageX === view.pageX && after.pageY === view.pageY) return {data:shot.data, size};
+      }
+      throw new Error("Viewport changed during screenshot; observe again");
+    } finally {
+      // A rejected start may still have partially initialized Chrome's stream.
+      started = true;
+      try { await stopStream(); } finally { delete trace.onTimeout; }
+    }
   }
 
   const point = (x,y) => {
@@ -428,12 +465,20 @@ async function execute(operation, args = {}, trace = {}) {
 }
 chrome.debugger.onDetach.addListener(({tabId}, reason) => {
   captureDocuments.delete(tabId);
+  captureStreams.delete(tabId);
   attached.delete(tabId);
   network.end(tabId, reason);
   // Chrome's "Cancel" control must not be undone by automatic reattachment.
   if (reason === "canceled_by_user") void updateBlocked(blocked => [...new Set([...blocked, tabId])]);
 });
 chrome.debugger.onEvent.addListener((source, method, params) => {
+  if (method === "Page.screencastFrame") {
+    // Acknowledge only our top-level stream; discard the frame payload.
+    // Otherwise Chrome stops producing frames when its queue fills.
+    if (!source.sessionId && captureStreams.has(source.tabId) && attached.has(source.tabId))
+      void cdp(source.tabId, "Page.screencastFrameAck", {sessionId:params.sessionId}).catch(() => {});
+    return;
+  }
   if (!source.sessionId) void network.event(source.tabId, method, params).catch(error => {
     network.end(source.tabId, String(error.message || error));
   });
@@ -449,6 +494,7 @@ chrome.tabs.onUpdated.addListener((tabId, change, tab) => {
 });
 chrome.tabs.onRemoved.addListener(tabId => {
   captureDocuments.delete(tabId);
+  captureStreams.delete(tabId);
   for (const key of captureHistory.keys()) {
     if (Number(key.split(':').at(-1)) === tabId) captureHistory.delete(key);
   }

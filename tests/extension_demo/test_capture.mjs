@@ -21,7 +21,7 @@ function browser({state='normal', active=false, command} = {}) {
         onCreated:listener,onUpdated:{addListener(fn) {events.updated=fn;}},onRemoved:{addListener(fn) {events.removed=fn;}}},
       windows:{get:async () => ({state,focused:false}),
         update:async () => {throw new Error('Capture must not focus or restore a window');}},
-      debugger:{attach:async () => {},detach:async () => {},onDetach:listener,onEvent:listener,
+      debugger:{attach:async () => {},detach:async () => {},onDetach:{addListener(fn) {events.detached=fn;}},onEvent:{addListener(fn) {events.debugger=fn;}},
         sendCommand:async (target,method,params) => {
           calls.push({tab:target.tabId,method,params});
           const result = command?.(target,method,params);
@@ -113,7 +113,7 @@ test('a late screenshot cannot start viewport checks or another capture',async (
   await b.timeout(/timed out/);
   finish({data:'late-image'});
   await new Promise(resolve => setImmediate(resolve));
-  assert.deepEqual(b.calls.map(c => c.method),['Page.getLayoutMetrics','Page.captureScreenshot']);
+  assert.deepEqual(b.calls.map(c => c.method),['Page.startScreencast','Page.getLayoutMetrics','Page.captureScreenshot','Page.stopScreencast']);
 });
 
 test('capture errors release ownership without changing the connection',async () => {
@@ -238,4 +238,91 @@ test('diagnostics correlate timed-out captures and count late CDP completion wit
   assert.equal(done.debug.commands['Page.captureScreenshot'].completed,1);
   assert.equal(done.debug.pending_captures,0);
   assert.equal(JSON.stringify(done).includes('private-image-payload'),false);
+});
+
+
+test('hidden capture keeps rendering through final metrics and stops before returning',async () => {
+  let streaming=false;
+  const b=browser({command:(_,method) => {
+    if(method==='Page.startScreencast') streaming=true;
+    if(method==='Page.getLayoutMetrics' || method==='Page.captureScreenshot') assert.equal(streaming,true);
+    if(method==='Page.stopScreencast') streaming=false;
+  }});
+  await b.run();
+  assert.equal(streaming,false);
+  assert.equal(vm.runInContext('captureStreams.size',b.context),0);
+  assert.equal(b.calls.some(c=>c.method==='Emulation.setFocusEmulationEnabled'),false);
+});
+
+test('size reads never start a render stream',async () => {
+  const b=browser();
+  assert.deepEqual(Array.from(await b.run('size')),[800,600]);
+  assert.equal(b.calls.some(c=>c.method.includes('Screencast')),false);
+});
+
+test('only owned top-level screencast frames are acknowledged and never used as screenshots',async () => {
+  let finish;
+  const b=browser({command:(_,method) => method==='Page.captureScreenshot' ? new Promise(r=>{finish=r;}) : undefined});
+  const request=b.start();
+  await b.clock.advance(200);
+  const frame={sessionId:7,data:'must-not-be-returned'};
+  b.events.debugger({tabId:1},'Page.screencastFrame',frame);
+  b.events.debugger({tabId:2},'Page.screencastFrame',frame);
+  b.events.debugger({tabId:1,sessionId:'child'},'Page.screencastFrame',frame);
+  finish({data:'real-screenshot'});
+  assert.equal((await request).data,'real-screenshot');
+  b.events.debugger({tabId:1},'Page.screencastFrame',frame);
+  await b.clock.flush();
+  const acks=b.calls.filter(c=>c.method==='Page.screencastFrameAck');
+  assert.equal(acks.length,1);
+  assert.equal(acks[0].tab,1);
+  assert.equal(acks[0].params.sessionId,7);
+});
+
+test('timeout stops streaming once but retains screenshot ownership until completion',async () => {
+  let finish;
+  const b=browser({command:(_,method) => method==='Page.captureScreenshot' ? new Promise(r=>{finish=r;}) : undefined});
+  await b.timeout(/timed out/);
+  assert.equal(b.calls.filter(c=>c.method==='Page.stopScreencast').length,1);
+  assert.equal(vm.runInContext('captureStreams.size',b.context),0);
+  await assert.rejects(b.run(),/still pending/);
+  finish({data:'expired'});
+  await b.clock.flush();
+  assert.equal(b.calls.filter(c=>c.method==='Page.stopScreencast').length,1);
+  assert.equal(vm.runInContext('viewportPending.size',b.context),0);
+});
+
+test('a late stream start is cleaned up without dispatching an expired screenshot',async () => {
+  let finish;
+  const b=browser({command:(_,method) => method==='Page.startScreencast' ? new Promise(r=>{finish=r;}) : undefined});
+  await b.timeout(/timed out at Page.startScreencast/);
+  assert.equal(b.calls.some(c=>c.method==='Page.stopScreencast'),false);
+  finish({});
+  await b.clock.flush();
+  assert.equal(b.calls.filter(c=>c.method==='Page.stopScreencast').length,1);
+  assert.equal(b.calls.some(c=>c.method==='Page.captureScreenshot'),false);
+  assert.equal(vm.runInContext('captureStreams.size',b.context),0);
+});
+
+test('rejected stream preparation cleans up and never dispatches capture',async () => {
+  const b=browser({command:(_,method) => {
+    if(method==='Page.startScreencast') return Promise.reject(Error('stream unavailable'));
+  }});
+  await assert.rejects(b.run(),/stream unavailable/);
+  assert.equal(b.calls.some(c=>c.method==='Page.captureScreenshot'),false);
+  assert.equal(b.calls.filter(c=>c.method==='Page.stopScreencast').length,1);
+  assert.equal(vm.runInContext('captureStreams.size',b.context),0);
+});
+
+test('detaching during capture removes stream ownership without reattaching',async () => {
+  let finish;
+  const b=browser({command:(_,method) => method==='Page.captureScreenshot' ? new Promise(r=>{finish=r;}) : undefined});
+  const request=b.start();
+  const rejected=assert.rejects(request,/Page changed/);
+  await b.clock.advance(200);
+  b.events.detached({tabId:1},'target_closed');
+  finish({data:'obsolete'});
+  await rejected;
+  assert.equal(vm.runInContext('captureStreams.size',b.context),0);
+  assert.equal(b.calls.some(c=>c.method==='Page.stopScreencast'),false);
 });

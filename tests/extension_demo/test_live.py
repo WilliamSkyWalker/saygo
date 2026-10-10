@@ -284,7 +284,10 @@ class ExtensionLive(unittest.TestCase):
                     ui.evaluate('id => chrome.tabs.update(id,{active:true})', other['id'])
                     before = platform.diagnose()
                     self.assertFalse(before['tab_active'])
-                    platform.screenshot_raw()
+                    # A first hidden screenshot may succeed while the next stalls.
+                    # Exercise the consecutive captures used by action preflight.
+                    for _ in range(3):
+                        platform.screenshot_raw()
                     platform.tap(150,100)
                     platform.scroll_at(150,200,-1 if index % 2 == 0 else 1)
                     platform.screenshot_raw()
@@ -293,6 +296,7 @@ class ExtensionLive(unittest.TestCase):
                         self.assertEqual(after[key],before[key],key)
                     self.assertTrue(after['connection_retained'])
                     self.assertFalse(after['last_capture']['pending'])
+                    self.assertEqual(after['debug']['active_capture_streams'],0)
                     self.assertEqual(page.evaluate('window.fixtureClicks'),index+1)
                     offsets = page.evaluate('[left.scrollTop,right.scrollTop,window.scrollY]')
                     self.assertAlmostEqual(offsets[0],100 if index % 2 == 0 else 0,delta=3)
@@ -351,6 +355,7 @@ class ExtensionLive(unittest.TestCase):
                         self.assertEqual(after[key],before[key],(mode,key))
                     self.assertTrue(after['connection_retained'])
                     self.assertFalse(after['last_capture']['pending'])
+                    self.assertEqual(after['debug']['active_capture_streams'],0)
                     if inactive:
                         ui.evaluate('id => chrome.tabs.remove(id)',inactive['id']);inactive=None
             # Cross the worker's ordinary idle interval without screenshot requests.

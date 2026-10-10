@@ -1,8 +1,8 @@
 # Python package release
 
-Package: `saygo-agent-control`. CLI: `saygo`. Version: `0.4.12` (beta software).
-Version 0.4.12 is published on PyPI. Its wheel passed installation and plugin preparation
-checks on Linux, Windows and macOS before upload.
+Package: `saygo-agent-control`. CLI: `saygo`. Version: `0.4.13` (beta software).
+The release workflow publishes after installation and plugin preparation checks
+on Linux, Windows and macOS. Verify the workflow and PyPI for publication status.
 
 ## Build and verify
 
@@ -10,7 +10,7 @@ checks on Linux, Windows and macOS before upload.
 python -m pip install build twine
 python -m build --outdir dist/python
 python -m twine check --strict dist/python/*
-python scripts/check_python_package.py dist/python/saygo_agent_control-0.4.12-py3-none-any.whl
+python scripts/check_python_package.py dist/python/saygo_agent_control-0.4.13-py3-none-any.whl
 ```
 
 The default build produces an sdist and builds the wheel from that sdist, checking
@@ -42,7 +42,7 @@ required reviewers disabled in the `pypi` environment. Adding a reviewer makes
 each production upload wait for approval. Trusted Publishing uses GitHub OIDC
 rather than committed credentials or a long-lived API token.
 
-Push a version tag matching `distribution/release.json` (for example `v0.4.12`)
+Push a version tag matching `distribution/release.json` (for example `v0.4.13`)
 to publish automatically. The **Build release** workflow publishes the GitHub
 release after its checks; **Python package** uploads to PyPI only after its build
 and Linux, Windows and macOS installation checks pass. Ordinary branch pushes

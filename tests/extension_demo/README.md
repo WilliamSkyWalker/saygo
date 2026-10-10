@@ -149,3 +149,38 @@ timeout without focus emulation. With focus emulation, two rounds pass before
 an unlabelled state assertion fails; the follow-up diagnostic run was blocked
 by approval timeouts. This is incomplete Windows evidence, not extension
 acceptance or proof that the long-session screenshot incident is resolved.
+
+
+### Background capture repair (2026-10-10)
+
+A Windows inactive-tab observation succeeded once, then the action's preflight
+capture timed out in `Page.captureScreenshot`. Layout requests and the native
+bridge remained responsive; no wheel input was dispatched. This separates this
+failure from a wheel command timeout.
+
+Extension 0.4.13 scopes a `Page.startScreencast` / `Page.stopScreencast` pair around
+screenshot capture so the hidden compositor continues producing frames. Stream
+frames are acknowledged and discarded; observation images still use the original
+viewport PNG capture and coordinate mapping. It does not activate tabs, focus
+windows, or change viewport emulation. Timeout cleanup does not unlock an
+unresolved screenshot or replay an action. Late stream preparation is cleaned
+up without starting an expired screenshot.
+
+Windows Chrome 154.0.8037.98 isolated extension checks passed 49 screenshots,
+12 alternating wheel scrolls, and a screenshot after 35 seconds inactive. Each
+round checked actual fixture scroll offsets, unchanged tab activity/window focus,
+and stream cleanup; differing scroll positions also produced different image
+hashes. The first check invoked the extension's
+request handler through test-only hooks in a disposable copy, without native
+messaging. A subsequent run through the real extension and a separate native host
+passed the same 49 screenshots, 12 scrolls and 35-second idle check. The temporary
+host registration was removed after the test. An earlier native-host attempt was
+inconclusive because window focus changed during startup; the successful run
+waited for startup to settle and retained the same strict state assertions.
+This is not yet acceptance on the user's existing long-lived profile,
+and does not establish minimized-window support.
+
+The native-host integration regression now takes three consecutive inactive-tab
+screenshots before each input. Deterministic capture tests also cover scoped
+rendering, owned frame acknowledgement, cleanup on error/timeout/detach, and
+late stream initialization. These mocked tests do not prove renderer liveness.

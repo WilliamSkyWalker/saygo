@@ -20,8 +20,8 @@ class PluginInstallTests(unittest.TestCase):
             override = 'b' * 32
             installer.write_json(root / 'installation.json',
                                  {'prepared_only': True, 'extension_id': original})
-            with patch.object(installer, 'prepare_runtime', return_value=root / 'python'):
-                args = ['--client', 'codex', '--prepare-only', '--root', str(root), '--source', str(ROOT)]
+            with patch.object(installer, 'prepare_runtime', return_value=root / 'python'), patch.object(installer, 'source_root', return_value=ROOT):
+                args = ['--client', 'codex', '--prepare-only', '--root', str(root), '--archive', str(root / 'release.zip')]
                 installer.main(args)
                 self.assertEqual(json.loads((root / 'installation.json').read_text())['extension_id'], original)
                 installer.main(args + ['--extension-id', override])

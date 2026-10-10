@@ -144,7 +144,7 @@ class ClientInstallTests(unittest.TestCase):
         self.assertEqual(skill.read_text(),'custom')
 
     def test_prepare_only_does_not_configure_clients(self):
-        with patch.object(installer,'prepare_runtime',return_value=self.root/'python'), patch.object(installer,'install_client') as install:
-            installer.main(['--client','all','--prepare-only','--root',str(self.root/'prepared'),'--source',str(ROOT)])
+        with patch.object(installer,'prepare_runtime',return_value=self.root/'python'), patch.object(installer,'source_root',return_value=ROOT), patch.object(installer,'install_client') as install:
+            installer.main(['--client','all','--prepare-only','--root',str(self.root/'prepared'),'--archive',str(self.root/'release.zip')])
         install.assert_not_called()
         self.assertFalse(self.directory.exists())

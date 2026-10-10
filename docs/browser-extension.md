@@ -118,7 +118,12 @@ Chrome cannot silently redirect a saved task to a reused numeric tab ID.
 Screenshot and size requests do not activate tabs, focus windows, or restore
 minimized windows. Explicit page selection still brings the selected page forward.
 Screenshots use `Page.captureScreenshot` with the existing PNG surface and viewport
-clip settings. No alternate capture source or automatic reconnect is used.
+clip settings. Extension 0.4.13 starts a short-lived `Page.startScreencast`
+before capture to keep hidden-tab rendering active, acknowledges and discards its
+frames, then stops it when capture finishes or times out. The returned image is
+still the viewport PNG from `Page.captureScreenshot`; screencast frames are never
+returned as observations. Size-only queries do not start a stream. No automatic
+reconnect or foreground fallback is used.
 
 Supported acceptance scenarios include inactive tabs, background windows and
 fully covered windows. Minimized windows are outside the current support scope;

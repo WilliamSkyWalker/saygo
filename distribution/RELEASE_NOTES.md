@@ -1,23 +1,35 @@
-# Saygo 0.4.12 — Background tab scrolling and automated store submission
+# Saygo 0.4.13 — Reliable inactive-tab capture
 
-- Scroll inactive tabs with mouse-wheel input and temporary logical focus emulation, without activating the tab or browser window.
-- Reset focus emulation after completion, failure or timeout. Retain the pending-input lock and reject stale page/control requests without replaying input or disconnecting the extension.
-- Add 12 rounds of tab-switch, screenshot, click and targeted-scroll integration coverage, plus short idle capture in an inactive tab.
-- Keep foreground, background, covered-window and inactive-tab release checks. Minimized windows and multi-hour endurance runs are outside the requested acceptance scope.
-- Retain screenshot timeout guidance and bounded diagnostics from 0.4.11, and fix report rendering compatibility with Python 3.11.
-- Submit Chrome Web Store packages automatically from release tags after regression checks. Google publishes the extension after review approval.
+Inactive tabs could return one screenshot and then stall in Chrome's screenshot
+interface, preventing the next scroll from being dispatched. Screenshot requests
+now briefly start a page screencast to keep rendering active, then stop it on
+completion or timeout. Returned observations still use the original viewport PNG;
+stream frames are acknowledged and discarded. Tabs and windows stay in place.
+
+- Preserve pending-request guards, stale-image rejection and no automatic input replay or reconnect.
+- Verify 49 screenshots, 12 alternating scrolls and 35 seconds of inactive idle through a real Windows Chrome extension and native host in an isolated profile.
+- Add stream lifecycle regression tests and consecutive inactive screenshots to the browser integration gate.
+- Update the shared device skill to use 85–90% of the visible list height for continuous scanning, retaining overlap and adjusting to actual movement.
+- Preserve the configured browser extension ID during setup upgrades unless explicitly overridden.
+- Include package-based client setup improvements already on main, so package upgrades update the managed integration without copying another runtime.
 
 ## Upgrade
 
 ```sh
 pipx upgrade saygo-agent-control --index-url https://pypi.org/simple --pip-args="--no-cache-dir"
-saygo setup --client codex
 ```
 
-Restart the agent client after setup. For unpacked extensions, replace the contents of the currently loaded extension folder with the development extension ZIP. Manually reload Saygo Browser in chrome://extensions or edge://extensions, then click Connect local bridge. Keep that folder. Store installations receive the update after Google approves and publishes it.
+Restart the agent client after upgrading. Installations using an older copied
+runtime need a one-time `saygo setup --client codex` migration (or their selected
+client). For unpacked extensions, replace the loaded folder with the development
+extension ZIP, manually reload it, and click Connect local bridge. Keep that folder.
+Store installations receive the extension update after Google approves it;
+upgrading the Python package alone does not update a running browser extension.
 
-## Known limits
+## Validation limits
 
-The original Chrome screenshot API is retained. These changes do not establish a fix for every intermittent Chrome screenshot stall, including the reported multi-hour Windows incident. A timeout does not cancel Chrome's outstanding command; its late image is discarded. No automatic disconnect, reconnect or input replay is used. Minimized windows are excluded from acceptance, and multi-hour endurance testing remains excluded. Full Windows background-tab acceptance is not yet established.
-
-Chrome Web Store submission is distinct from approval; check the release workflow for the submitted review state. Desktop binaries are not part of this release workflow.
+The Windows check used an isolated profile; it does not establish multi-hour
+endurance or minimized-window support. A timeout still retains ownership of
+Chrome's outstanding command and discards late images. Desktop binaries are not
+part of this release workflow. Chrome Web Store submission is distinct from
+approval; consult the release workflow for the current review state.
