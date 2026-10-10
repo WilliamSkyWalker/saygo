@@ -4,6 +4,10 @@ on:
     tags: ['v*']
   workflow_dispatch:
     inputs:
+      release_tag:
+        description: Existing release tag to build with the current validation scripts (optional)
+        type: string
+        default: ''
       publish:
         description: Package index (build only by default)
         type: choice
@@ -29,11 +33,15 @@ concurrency:
 jobs:
   checks:
     uses: ./.github/workflows/checks.yml
+    with:
+      ref: ${{ inputs.release_tag && format('refs/tags/{0}', inputs.release_tag) || github.ref }}
   build:
     needs: checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag && format('refs/tags/{0}', inputs.release_tag) || github.ref }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -41,7 +49,7 @@ jobs:
       - name: Check release tag for production publishing
         if: github.event_name == 'push' || inputs.publish == 'pypi'
         env:
-          RELEASE_REF: ${{ github.ref }}
+          RELEASE_REF: ${{ inputs.release_tag && format('refs/tags/{0}', inputs.release_tag) || github.ref }}
         run: python -c "import json,os; assert os.environ['RELEASE_REF'] == 'refs/tags/v'+json.load(open('distribution/release.json'))['version'], 'Publish PyPI from the matching release tag'"
       - run: python -m build --outdir dist/python
       - run: python -m twine check --strict dist/python/*
@@ -64,6 +72,7 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
+      # Validate the tagged wheel using this workflow revision's corrected checks.
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
