@@ -1,44 +1,65 @@
-# Saygo 0.4.14 — Restore package update notifications
+# Saygo 0.4.16 — Shared browser bridge and native desktop connections
 
-Package installations previously bypassed update checking and returned only a
-pipx management message, so clients could not see a newer available version.
-Version checking and notification now work independently of automatic upgrades.
+Windows desktop and WSL previously selected different native-host directories.
+An extension connected to one could appear offline to the other, even after a
+PyPI upgrade. Both clients now discover the browser OS's registered and live host.
 
-- Check public PyPI in the background on package MCP startup. Report stable,
-  non-yanked newer releases with their version, URL and pipx upgrade command.
-- Refresh absent, expired or invalid caches from `device_sessions`, including
-  when an older copied launcher still bypasses startup checks. The initial
-  result may say `checking: true`; the completed result appears on a later call.
-- Make package `saygo update --check` perform a real lookup. Keep automatic
-  installation disabled; ignore stale managed-runtime upgrade flags.
-- Remove reminders for versions already installed. Contain offline, metadata,
-  cache-write and worker failures without blocking device operations.
-- Consolidate ordinary documentation in `docs`, retaining runtime Markdown
-  resources in their required locations. Add a 186-item project requirement
-  baseline, 633 automated BDD contracts and 66 environment acceptance scenarios.
+## Browser connection and upgrade repair
 
-## Upgrade
+- Share one Windows bridge between desktop, Windows Python and WSL. New installs
+  use `%LOCALAPPDATA%/Saygo/browser-bridge`; a working legacy directory is retained.
+- Probe the host before reporting it connected. Report multiple live hosts,
+  incompatible extension identities and unresponsive hosts without choosing a
+  different browser silently.
+- Check actual registration and the live directory on package startup, including
+  when the Python version has not changed. Repair registration drift without
+  disconnecting the running extension.
+- Preserve saved page bindings. Create an explicitly named session and select
+  its intended page when recovering an obsolete binding.
+- Bound retries for Windows status-file sharing violations so a concurrent reader
+  does not immediately terminate the host. Browser actions are never replayed.
+- Display the actual connection failure instead of always asking users to connect
+  the extension again. Native-host diagnostics now identify version `0.4.16`.
+
+## Desktop application
+
+- Add a first-use welcome flow, automatic native computer connection, launchable
+  application inventory and whole-computer control on Windows/macOS.
+- Observe browser resources when the task needs them; preserve resource choices
+  across task recovery. Pause automatic rebinding while a task owns the resource.
+- Improve model configuration, masked token management and actionable connection
+  errors. Minimize the controller during whole-computer tasks and restore it when
+  the task finishes or needs human input.
+- Include Windows runner resources in the packaged application. Desktop archives
+  are built on their target operating systems and are unsigned beta builds.
+
+## Upgrade and component versions
 
 ```sh
 pipx upgrade saygo-agent-control
 ```
 
-Restart the Agent client. Package installations already bound to their pipx
-interpreter do not need repeated setup. Pre-package copied-runtime installations
-still need a one-time `saygo setup --client codex` migration (or their selected
-client). Editing a checkout alone does not update installed 0.4.12 runtimes.
+Restart the Agent client to load the new Python code. Package installations keep
+their pipx interpreter. Existing connections stay alive; an already running host
+keeps its current code until the user reconnects. No automatic disconnect occurs.
+Desktop users download the matching `SaygoDesktop-0.4.16-*` release asset after
+the desktop build has completed; desktop updates are not automatic.
 
-The browser extension stays at 0.4.13: this release does not change extension
-files or require a browser reconnect. Existing managed GitHub installations
-retain their checksum verification and opt-in update controls.
+The Python package, managed installer and newly built native host use `0.4.16`.
+The browser extension remains `0.4.13`, with the same protocol and extension ID.
+Its files have not changed, so this release needs no new extension upload.
+Version `0.4.15` was previously withdrawn and is not reused.
 
 ## Validation boundary
 
-The added 633 tests run offline, including real worker threads, on-disk cache
-handling and the MCP `device_sessions` result path. The 66 BDD environment
-acceptance scenarios are specifications, not a claim of completed hardware runs.
-See `docs/testing/results.md` and the release workflows for scoped results.
-Python publishing is gated on Linux, Windows and macOS wheel installation and
-repeat setup. Store review status remains separate from package publication.
-In-progress desktop application changes in the shared development workspace are
-not part of this release.
+Regression coverage includes real native-host subprocesses with a synthetic
+extension peer, shared-directory discovery, same-version upgrade repair and
+Windows file-sharing failures. The isolated real Chrome suite starts two separate
+MCP servers, verifies page discovery and returned PNGs, and checks actual input
+after a restart. The release gate also runs the CLI Playwright browser suite.
+
+PyPI publishing is gated on clean wheel installation and repeat setup on Linux,
+Windows and macOS. Desktop builds run Qt tests and startup checks; these do not
+establish complete GUI task acceptance on all operating systems. Android/iOS
+hardware acceptance is not part of this release. See the tagged workflows and
+`docs/testing/release-0.4.16.md` for actual results and outstanding checks.

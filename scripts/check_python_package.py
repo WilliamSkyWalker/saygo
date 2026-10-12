@@ -17,6 +17,7 @@ def check(wheel):
         with zipfile.ZipFile(io.BytesIO(bundle.read('saygo/_setup_source.zip'))) as source:
             required = ['pyproject.toml', 'setup.py', 'MANIFEST.in',
                         'scripts/install_agent_plugin.py', 'saygo/setup.py',
+                        'saygo/integrations/browser_location.py', 'AGENTS.md',
                         'plugins/saygo-device/.mcp.json',
                         'plugins/saygo-device/.codex-plugin/plugin.json',
                         'plugins/saygo-device/.claude-plugin/plugin.json',
@@ -52,7 +53,11 @@ def check(wheel):
             assert candidate.parent.resolve() == python.parent.resolve()
         assert (market / 'skills/device/SKILL.md').is_file()
         assert (managed / 'browser-extension/manifest.json').is_file()
-        run([server['command'], '-I', '-c', 'import saygo.setup; from saygo.mcp import server'])
+        run([server['command'], '-I', '-c',
+             'import saygo.setup; from saygo.mcp import server; '
+             'from saygo.integrations import browser_location, browser_bridge; '
+             'from importlib.metadata import version; '
+             'assert browser_bridge.VERSION == version("saygo-agent-control")'])
         # Package installs use the wheel's interpreter, including on repeat setup.
         run([cli, 'setup', '--client', 'both', '--prepare-only', '--browser', 'none', '--root', managed])
         repeated = json.loads((managed / 'installation.json').read_text())

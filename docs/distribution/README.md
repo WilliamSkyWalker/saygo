@@ -4,8 +4,9 @@ One versioned Python installer prepares an isolated MCP runtime, registers the n
 Claude/Codex plugins, configures Qoder/QoderCN, and installs the Chrome/Edge native messaging host. Git is not
 needed. Run it in the environment where the client CLI runs (including WSL).
 Python 3.10+ and a supported Agent client are prerequisites. This is currently a
-beta distribution. The Python package is published on PyPI; signed desktop installers
-and Chrome Web Store publication are not part of this release.
+beta distribution. The Python package is published on PyPI. Desktop releases use
+unsigned native archives; signing and notarization are not provided. The browser
+extension has a separate version and store publication status.
 
 ## Install from PyPI
 

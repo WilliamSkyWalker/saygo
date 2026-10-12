@@ -33,6 +33,8 @@ class ReleaseTests(unittest.TestCase):
             work = Path(tmp)/'extract'; work.mkdir()
             source = installer.source_root(None, work, str(archive))
             self.assertTrue((source/'saygo/integrations/browser_setup.py').is_file())
+            self.assertTrue((source/'saygo/integrations/browser_location.py').is_file())
+            self.assertTrue((source/'AGENTS.md').is_file())
             plugin = installer.prepare_plugin(source, Path(tmp)/'managed', Path('/fake/python'), 'test')
             self.assertTrue((plugin/'plugins/saygo-device/.mcp.json').is_file())
             archive.write_bytes(archive.read_bytes()+b'corrupted')

@@ -21,7 +21,7 @@ def archive(path, entries):
 
 def source_files():
     # Deliberately exclude checkout configuration, credentials, local tests and run artifacts.
-    for name in ('agent.md', 'LICENSE', 'pyproject.toml', 'setup.py', 'MANIFEST.in'):
+    for name in ('AGENTS.md', 'agent.md', 'LICENSE', 'pyproject.toml', 'setup.py', 'MANIFEST.in'):
         yield ROOT / name
     allowed = {'.py', '.js', '.cjs', '.ps1', '.json', '.md', '.txt', '.html', '.png', '.svg', '.feature'}
     for directory in ('saygo', 'plugins/saygo-device', 'extensions/saygo-browser', 'distribution', 'docs'):
@@ -29,7 +29,7 @@ def source_files():
             if path.is_file() and '__pycache__' not in path.parts and (path.suffix in allowed or path.name == 'LICENSE'):
                 yield path
     for name in ('install_agent_plugin.py', 'install_saygo.py', 'build_release.py', 'build_desktop.py', 'package_desktop.py',
-                 'desktop_windows.spec'):
+                 'desktop_windows.spec', 'check_desktop_build.py'):
         yield ROOT / 'scripts' / name
 
 

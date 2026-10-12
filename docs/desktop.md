@@ -82,6 +82,7 @@ automatic updates, signed installers or a graphical mobile toolchain wizard.
 ```sh
 python3 -m pip install pyinstaller
 python3 scripts/build_desktop.py
+python3 scripts/check_desktop_build.py
 python3 scripts/package_desktop.py
 ```
 
@@ -95,6 +96,12 @@ together. Opening the desktop app does not open a console window.
 `package_desktop.py` creates a verified DMG with an Applications shortcut on macOS,
 a ZIP containing the executable and dependencies on Windows, and tar.gz on Linux.
 Each archive has a SHA256 checksum. Output is in `dist/installers`.
+
+The desktop workflow tests the packaged executable itself before archiving:
+offscreen Qt startup, native-host version/handshake and a file-IPC round trip in
+isolated state. Its extension peer is synthetic; this checks the frozen artifact,
+not real Chrome interaction. Approved release builds are attached to the matching
+GitHub release as `SaygoDesktop-<version>-<platform>-<architecture>` assets.
 
 The manual desktop workflow builds Windows/macOS/Linux artifacts. This does not
 sign or notarize them. Before public distribution, include dependency license
