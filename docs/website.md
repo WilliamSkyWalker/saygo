@@ -1,0 +1,49 @@
+# Saygo 官网
+
+面向 AI 工具用户和开发者的静态官网，域名 https://saygo.work/。
+
+当前版本采用石墨黑背景、橙色强调、细网格和大字号排版。首屏突出产品介绍与 QQ 音乐实机视频；快速接入区集中展示安装命令和三个接入步骤。支持移动端布局与减少动态效果偏好。
+
+## 本地预览
+
+```sh
+python3 -m http.server 8080 --bind 127.0.0.1
+```
+
+打开 http://127.0.0.1:8080。无需构建依赖。
+
+## 语言
+
+支持简体中文与英文。首次访问使用浏览器首选语言：`zh`（包括地区变体）显示中文，其他语言显示英文。右上角可随时切换，手动选择保存到 `localStorage` 的 `saygo.language`，刷新或再次访问优先使用该设置。存储被禁用时仍可切换当前页面。
+
+翻译维护在 `i18n.js`，包括页面内容、复制反馈、无障碍标签和页面元信息。安装命令与客户端选择不随语言切换而改变。
+
+## 安装入口
+
+快速接入区支持 Codex / Claude Code 和 macOS、Linux、WSL / Windows 切换。默认使用已发布的 PyPI 包，显示 `pipx install` 与默认使用商店插件的 `saygo setup`。浏览器安装入口指向 Chrome 网上应用店的 Saygo Browser（`ehomcchjfomfkcmbeinlcmpbaamdhfbo`），中英文文案保持一致。在 `site-config.js` 中设置 `installMode: "source"` 可切换回源码安装。复制使用 Clipboard API，失败时选中命令供手动复制。
+
+## 视频
+
+保留 `public/videos/brand.mp4` 和 `poster.jpg`，通过 `site-config.js` 配置视频地址与封面。播放器不自动播放，使用原生控件，播放出错时显示文件入口。
+
+## 部署
+
+推送到 `main` 后，由 `.github/workflows/website.yml` 校验静态资源并通过 Wrangler 自动发布到 Cloudflare Pages，项目名为 `saygo`，生产分支为 `main`。也可以在 GitHub Actions 手动运行部署。网站不需要 npm 构建。
+
+GitHub 仓库 Actions Secrets 需要配置：
+
+- `CLOUDFLARE_ACCOUNT_ID`：目标 Cloudflare 账户 ID。
+- `CLOUDFLARE_API_TOKEN`：该账户的 Cloudflare Pages 编辑权限。
+
+首次部署会创建 Direct Upload Pages 项目；已有项目会复用。上线后在 Pages 项目的 Custom domains 绑定 `saygo.work` 和 `www.saygo.work`，由 Cloudflare 管理 DNS 和 HTTPS。
+
+`www` 到主域名的跳转使用域名下的 Cloudflare Redirect Rule：匹配 `http*://www.saygo.work/*`，目标为 `https://saygo.work/${2}`，状态码 301，并保留查询参数。Pages 的 `_redirects` 不支持按来源域名匹配。
+
+本地需要手动发布时，可以运行：
+
+```sh
+npx wrangler login
+npx wrangler pages deploy website-project --project-name=saygo --branch=main
+```
+
+上面部署命令在仓库根目录运行。GitHub Actions 使用 API Token，无需交互登录。

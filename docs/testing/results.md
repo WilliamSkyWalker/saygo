@@ -1,0 +1,72 @@
+# 更新通知与文档整理验证记录
+
+本页保留 0.4.14 的历史结果；最新桌面与共享 bridge 发布见
+[0.4.16 验证记录](release-0.4.16.md)。
+
+日期：2026-10-12。授权版本：0.4.14。
+
+## 需求和新增测试
+
+- 全项目需求：186 条，见 [requirements.md](../requirements.md)。
+- 新增自动化：621 条独立矩阵用例 + 12 条线程/MCP 集成测试，共 633 条，全部有对应 BDD 场景。
+- 另有 66 条 `@manual` 跨模块/环境验收场景；没有执行的场景不计为通过。
+- 修复前首次执行 621 条：63 failures、1 error，均在更新相关功能；其余 557 条通过。
+- 修复后 633 条全部通过；并发合并、异步返回、旧启动器缺口、离线保留已知版本、包版本读取失败、禁止 package apply、只读缓存与线程创建失败都有专项验证。
+
+## 开发工作区验证
+
+| 检查 | 结果 |
+| --- | --- |
+| 完整 Python 回归 | 906 条，892 通过，14 因环境条件跳过 |
+| Node 扩展回归 | 4 个测试文件通过 |
+| BDD 与 Python 测试定义同步 | 633 条一致 |
+| 从 sdist 构建 wheel | 成功 |
+| Linux 干净环境 wheel 安装 | CLI help、setup help、MCP 导入、prepare-only 和重复 setup 通过 |
+| 源码/扩展发布包本地构建 | 成功，未发布此开发构建 |
+
+上述开发工作区包含先前已有的桌面在研改动，测试总数不能直接当作发布提交的总数。
+发布已使用仅包含本次文档、需求测试与更新修复的干净提交，重新执行检查；结果见下文。
+本地验证仅为 Linux；Windows/macOS 安装结果由对应发布工作流单独提供并已通过，
+尚未运行的真实设备、商店及模型服务验收不在本地通过范围内。
+
+默认系统未安装 `build` 前端，因此本地使用现有 setuptools/wheel：先生成 sdist，
+再在 /tmp 新提取目录构建 wheel。干净安装验收首次因沙箱 DNS 失败，获授权联网后
+重新执行完整验收通过。没有借用 system-site-packages 或以 mock 替代安装检查。
+
+## 发布核对
+
+以 GitHub 的 0.4.14 发布工作流及 PyPI 实际版本文件/索引为准。
+流水线成功、产物可见、PyPI 可安装、浏览器商店状态是不同检查项。
+此次扩展文件未改，扩展版本保持 0.4.13。
+
+## 干净发布提交本地验收
+
+实现提交 `7c3c827` 已单独导出至 /tmp，排除工作区桌面在研改动后重跑：
+
+- Python：879 条，871 通过、8 条因 Qt/真实浏览器/平台环境条件跳过，无失败。
+- 新增 633 条测试全部通过，BDD 映射检查通过。
+- Node：4 个扩展测试文件通过。
+- 0.4.14 sdist 在新的提取目录生成 wheel；Linux 临时干净环境安装、CLI/setup help、
+  MCP 导入、prepare-only 和重复 setup 全部通过。
+
+实现验收后仅补充文档。正式发布标签 `v0.4.14` 对应 `0c08a89e3353c8afd66ef6a95578a1a29373a857`；标签工作流重新构建产物，并通过三平台安装检查。
+
+
+## 正式发布结果（2026-10-12）
+
+- [Python package 38193691524](https://github.com/WilliamSkyWalker/saygo/actions/runs/38193691524)：核心回归、真实浏览器回归、构建、Linux/Windows/macOS wheel 安装及发布全部 success。
+- [Build release 38193691549](https://github.com/WilliamSkyWalker/saygo/actions/runs/38193691549)：核心、真实浏览器、打包与商店步骤全部 success。
+- [GitHub v0.4.14](https://github.com/WilliamSkyWalker/saygo/releases/tag/v0.4.14)：正式发布，非 draft、非 prerelease；安装器、源码 ZIP、扩展 development/store ZIP、release-manifest.json、SHA256SUMS 共 6 项齐全。
+- [PyPI 0.4.14](https://pypi.org/project/saygo-agent-control/0.4.14/)：wheel 与 sdist 都可用且未 yank；pip 使用的 simple 索引也返回这两个文件，最高版本为 0.4.14。
+- 扩展保持 0.4.13，商店日志明确 `PUBLISHED` / already published，本次没有重复上传或提交审核。
+
+PyPI 发布文件 SHA256：
+
+| 文件 | SHA256 |
+| --- | --- |
+| saygo_agent_control-0.4.14-py3-none-any.whl | 0f81ddc8045af8c62db70aa6b078b2a843bb422babb72c63d32c819ec0d77414 |
+| saygo_agent_control-0.4.14.tar.gz | a52c78b46cd2eddb845b84471066e4e7c3240a43b2f6b1d29de42ba8c25f12df |
+
+已安装的 0.4.12 不会因源码或发布页面变化自动获得修复。用户需要运行 `pipx upgrade saygo-agent-control` 并重启 Agent；本轮没有修改用户现有 pipx 环境。
+
+发布后通过 `pip download --index-url https://pypi.org/simple saygo-agent-control==0.4.14 --no-deps` 实际下载成功；wheel SHA256 与 PyPI 元数据一致，包内 updates.py 与 v0.4.14 标签源码一致。
