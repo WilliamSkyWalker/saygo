@@ -1,4 +1,7 @@
-# Saygo Desktop (first development build)
+# Saygo Desktop (beta)
+
+[0.4.16 downloads](https://github.com/WilliamSkyWalker/saygo/releases/tag/v0.4.16)
+include Windows x64, macOS arm64 and Linux x86_64 native archives and checksums.
 
 Saygo Desktop uses **Qt 6 Widgets + PySide6 (Python)**. Qt is the UI framework;
 Python is the implementation language. This directly reuses the existing control
@@ -112,14 +115,21 @@ and obligations still apply; see the official Qt documentation.
 
 Linux/WSL: Qt offscreen startup, screenshot rendering, core pause/recovery tests
 and local standalone packaging are checked during development.
-Windows x64: a native Python 3.13 build passed 32 desktop tests including chat
+Windows x64: native Python 3.13 passed 45 desktop tests including chat
 interaction and connection tests. Automatic local connection, full-desktop capture
 and launchable application discovery passed native checks. The frozen GUI passed visible Qt startup; PE headers confirm
 a windowed GUI and a separate console host, which passed the native-messaging handshake. A
 portable ZIP was produced. Clean-machine installation and live task execution
 remain unverified. Windows users do not need WSL, Python or pyenv.
-macOS: the DMG packaging script and CI workflow are prepared, but no macOS build
-or runtime test has been performed yet. DMG support is not yet validated.
+Release 0.4.16 also passed native Windows CI tests, packaged offscreen Qt startup,
+frozen native-host version/handshake/file IPC and ZIP packaging on the tagged commit.
+macOS arm64: native CI passed the desktop tests, packaged offscreen Qt startup,
+frozen native-host version/handshake/file IPC, DMG creation and `hdiutil verify`.
+This does not validate screen-recording/accessibility permissions or full GUI
+tasks on a user's Mac, and no Intel macOS binary is included in this release.
+Linux x86_64 passed the equivalent frozen Qt/host checks and archive packaging.
+The host checks use a synthetic extension peer. Full evidence is in
+[the 0.4.16 validation record](testing/release-0.4.16.md).
 The app can run on Linux, but Linux local-window automation is not implemented by
 the current Saygo drivers; browser extension and supported mobile paths remain
 available. A live provider task needs a user-supplied model and connected test app.

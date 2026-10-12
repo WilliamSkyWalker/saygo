@@ -1,9 +1,10 @@
 # 更新历史
 
 本页记录产品行为变化、升级方式和验收边界；发布状态与构建成功分开记录。
-浏览器扩展版本可独立于 Python 包版本。详细本轮验证见 [测试记录](testing/results.md)。
+浏览器扩展版本可独立于 Python 包版本。最新验证见 [0.4.16 测试记录](testing/release-0.4.16.md)，
+先前的更新提醒修复见 [0.4.14 测试记录](testing/results.md)。
 
-## 0.4.16 — 2026-10-12（准备发布）
+## 0.4.16 — 2026-10-12（已发布）
 
 - 统一 Windows 桌面版、Windows Python 与 WSL 的浏览器 bridge 发现，保留在线旧目录。
 - 同版本启动也检查实际注册和在线目录，修复升级后的目录漂移；不自动断开插件或换页面。
@@ -12,6 +13,8 @@
 - 补充共享发现、升级、Windows 文件竞争及真实 MCP 重启测试；增加 Windows CI。
 - Python/native host/桌面采用 0.4.16；浏览器扩展保持 0.4.13。详见
   [发布说明](distribution/RELEASE_NOTES.md)和[实际验证记录](testing/release-0.4.16.md)。
+- [GitHub 发布及三平台桌面下载](https://github.com/WilliamSkyWalker/saygo/releases/tag/v0.4.16)
+  与 [PyPI 0.4.16](https://pypi.org/project/saygo-agent-control/0.4.16/) 均已核实公开可用。
 
 ## 0.4.14 — 2026-10-12（已发布）
 

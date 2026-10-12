@@ -63,7 +63,7 @@ Saygo 为外部编程 Agent 提供跨手机、浏览器和桌面窗口的视觉�
 - `scripts/install_agent_plugin.py` 安装托管 runtime、客户端接入和浏览器桥；支持 Claude/Codex/Qoder/QoderCN CLI。新增客户端共用操作 Skill，只保留接入差异。
 - `scripts/build_release.py` 按白名单生成源码、带 SHA256 的版本化安装器和扩展 ZIP；不得混入 `.env`、本机会话、截图或客户用例。
 - `scripts/build_desktop.py` 生成原生目录包；`scripts/package_desktop.py` 在目标 OS 生成 Windows ZIP / macOS DMG / Linux tar.gz 与校验和。`.github/workflows/desktop.yml` 手动构建，不自动发布。
-- Windows x64 已通过 7 项 desktop 测试、打包 EXE 的 Qt 启动和 native-host 握手；Linux GUI 启动/打包已检查。macOS 脚本未实机验证；签名、公证、干净机器和完整模型业务任务仍待验收。不得将这些检查混称为全平台实测。
+- 0.4.16 已通过 Windows x64、macOS arm64、Linux x86_64 的桌面测试、实际冻结 Qt 启动、native-host 版本/握手/IPC 和归档检查；Windows 本地另有 45 项 offscreen 桌面测试。IPC 使用模拟扩展对端，完整真实模型业务任务、签名与公证仍不在通过范围内。实际证据见 `docs/testing/release-0.4.16.md`，不得混称为六端真机验收。
 
 使用和验证边界见 [desktop](docs/desktop.md)、[distribution](docs/distribution/README.md)。
 

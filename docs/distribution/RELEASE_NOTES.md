@@ -42,8 +42,8 @@ pipx upgrade saygo-agent-control
 Restart the Agent client to load the new Python code. Package installations keep
 their pipx interpreter. Existing connections stay alive; an already running host
 keeps its current code until the user reconnects. No automatic disconnect occurs.
-Desktop users download the matching `SaygoDesktop-0.4.16-*` release asset after
-the desktop build has completed; desktop updates are not automatic.
+Desktop users download the matching `SaygoDesktop-0.4.16-*` release asset for
+Windows x64, macOS arm64 or Linux x86_64; desktop updates are not automatic.
 
 The Python package, managed installer and newly built native host use `0.4.16`.
 The browser extension remains `0.4.13`, with the same protocol and extension ID.
@@ -63,3 +63,21 @@ Windows and macOS. Desktop builds run Qt tests and startup checks; these do not
 establish complete GUI task acceptance on all operating systems. Android/iOS
 hardware acceptance is not part of this release. See the tagged workflows and
 `docs/testing/release-0.4.16.md` for actual results and outstanding checks.
+
+## Verified publication (2026-10-12)
+
+- [PyPI publishing and three-platform installation](https://github.com/WilliamSkyWalker/saygo/actions/runs/38209220447)
+  passed. Both distributions are visible and not yanked; a standard pip download
+  succeeded, and the wheel's shared-bridge, native-host and update code matches
+  the release tag byte for byte.
+- [GitHub release](https://github.com/WilliamSkyWalker/saygo/releases/tag/v0.4.16)
+  is public with all 12 assets: source/installer/extension metadata plus three
+  native desktop archives and their checksums.
+- [Desktop builds](https://github.com/WilliamSkyWalker/saygo/actions/runs/38208607638)
+  passed on the exact tagged commit. [Publication](https://github.com/WilliamSkyWalker/saygo/actions/runs/38209742540)
+  verified that provenance and all three archive hashes before upload.
+- The extension store check confirmed `0.4.13` is already published and skipped
+  duplicate upload/submission. No extension reload was performed.
+
+Detailed results and archive hashes are recorded in the
+[0.4.16 validation record](https://github.com/WilliamSkyWalker/saygo/blob/main/docs/testing/release-0.4.16.md).
