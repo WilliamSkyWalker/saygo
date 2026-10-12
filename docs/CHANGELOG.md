@@ -3,7 +3,7 @@
 本页记录产品行为变化、升级方式和验收边界；发布状态与构建成功分开记录。
 浏览器扩展版本可独立于 Python 包版本。详细本轮验证见 [测试记录](testing/results.md)。
 
-## 0.4.14 — 2026-10-12（发布中）
+## 0.4.14 — 2026-10-12（已发布）
 
 ### 更新提醒修复
 
@@ -31,7 +31,11 @@ pipx upgrade saygo-agent-control
 升级后重启 Agent。已使用 package 环境的安装不需要重复 setup；旧复制运行时安装仍需一次 setup 迁移。
 
 干净实现提交本地回归：879 条 Python 测试，871 通过、8 条环境条件跳过；4 个 Node 测试文件通过。
-Linux 干净 wheel 安装、MCP 导入及重复 setup 通过。三平台 CI、PyPI 实际可见性和 GitHub 产物将在发布后分别核对；66 条环境场景不等于已完成真机验收。
+Linux 本地干净 wheel 安装、MCP 导入及重复 setup 通过。发布 CI 的 Linux、Windows、macOS 安装验收全部通过；GitHub 6 项发布产物及 PyPI wheel/sdist、simple 安装索引均已核对。66 条环境场景不等于已完成真机验收。
+
+[GitHub 0.4.14](https://github.com/WilliamSkyWalker/saygo/releases/tag/v0.4.14) · [PyPI 0.4.14](https://pypi.org/project/saygo-agent-control/0.4.14/) · [三平台安装与发布流水线](https://github.com/WilliamSkyWalker/saygo/actions/runs/38193691524)。
+
+扩展 0.4.13 已核对为 `PUBLISHED`，本次商店步骤跳过重复上传；该状态来自 [发布流水线](https://github.com/WilliamSkyWalker/saygo/actions/runs/38193691549) 的商店日志。
 
 ## 0.4.13 — 已发布
 
