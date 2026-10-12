@@ -1,5 +1,6 @@
 # Saygo 文档索引
 
+- [更新历史](CHANGELOG.md)：版本改动、升级方式与验证范围。
 - [全项目需求基线](requirements.md)：需求编号、来源、实现状态与验收边界。
 - [产品与快速开始](README.md)、[架构](architecture.md)、[开发约束](../agent.md)。
 - [Agent 操作](agent-control.md)、[统一控制](control.md)、[工作流](runtime.md)。

@@ -1,6 +1,6 @@
 # Saygo
 
-[完整文档索引](index.md) · [全项目需求](requirements.md) · [BDD 测试与验收](testing/README.md)
+[完整文档索引](index.md) · [更新历史](CHANGELOG.md) · [全项目需求](requirements.md) · [BDD 测试与验收](testing/README.md)
 
 
 **你说，它做。**
