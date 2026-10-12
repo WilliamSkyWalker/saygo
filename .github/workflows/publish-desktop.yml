@@ -1,0 +1,77 @@
+name: Publish verified desktop artifacts
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing release tag matching the verified desktop build
+        type: string
+        required: true
+      build_run_id:
+        description: Successful Desktop development builds run for the same commit
+        type: string
+        required: true
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      BUILD_RUN_ID: ${{ inputs.build_run_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag }}
+      - name: Verify release and build provenance
+        run: |
+          python3 - <<'PY'
+          import json, os, subprocess
+          def gh(*args):
+              return json.loads(subprocess.check_output(['gh', *args], text=True))
+          tag, run_id = os.environ['RELEASE_TAG'], os.environ['BUILD_RUN_ID']
+          assert run_id.isdigit(), 'Expected a numeric build run ID'
+          version = json.load(open('distribution/release.json'))['version']
+          assert tag == 'v' + version, 'Tag does not match release metadata'
+          assert gh('release', 'view', tag, '--json', 'tagName')['tagName'] == tag
+          sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          prefix = 'repos/' + os.environ['GITHUB_REPOSITORY'] + '/actions/runs/' + run_id
+          run = gh('api', prefix)
+          assert run['conclusion'] == 'success' and run['head_sha'] == sha, 'Build must succeed on the release commit'
+          assert run['path'] == '.github/workflows/desktop.yml', 'Unexpected build workflow'
+          artifacts = gh('api', prefix + '/artifacts')['artifacts']
+          expected = {'SaygoDesktop-windows-latest', 'SaygoDesktop-macos-latest', 'SaygoDesktop-ubuntu-24.04'}
+          assert len(artifacts) == 3 and {a['name'] for a in artifacts} == expected
+          assert not any(a['expired'] for a in artifacts)
+          print('Verified desktop build', run_id, 'for', tag, 'at', sha)
+          PY
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ github.token }}
+          path: desktop-assets
+      - name: Verify checksums and publish without replacing existing assets
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, subprocess
+          from pathlib import Path
+          root = Path('desktop-assets')
+          checks = sorted(root.rglob('*.sha256'))
+          assert len(checks) == 3, 'Expected three desktop checksums'
+          version = json.load(open('distribution/release.json'))['version']
+          assets = []
+          for check in checks:
+              archive = check.with_suffix('')
+              expected, name = check.read_text().strip().split(maxsplit=1)
+              assert name == archive.name and name.startswith('SaygoDesktop-' + version + '-')
+              with archive.open('rb') as stream:
+                  actual = hashlib.file_digest(stream, 'sha256').hexdigest()
+              assert actual == expected, 'Checksum mismatch: ' + name
+              print(name, actual)
+              assets.extend([archive, check])
+          assert {p for p in root.rglob('*') if p.is_file()} == set(assets), 'Unexpected artifact contents'
+          assert len({p.name for p in assets}) == 6, 'Duplicate asset names'
+          subprocess.run(['gh', 'release', 'upload', os.environ['RELEASE_TAG'], *map(str, assets)], check=True)
+          PY

@@ -158,6 +158,12 @@ included. `--prepare-only --client both --root /tmp/saygo-package-check` builds
 client bundles without registering clients/hosts. Running from the checkout is
 available for Codex via `python3 scripts/install_development.py` (project scope only).
 
+After a successful desktop build, run **Publish verified desktop artifacts** with
+the existing release tag and that desktop workflow run ID. It requires all three
+platform artifacts from a successful build of the exact tagged commit, verifies
+each archive's SHA256, and attaches the archives and checksums to the release.
+It does not replace existing assets or rebuild from a newer branch.
+
 Push a tag matching `distribution/release.json` to run regression checks, publish
 GitHub release artifacts and automatically submit the store ZIP for review. Google
 publishes it after approval. The Python package workflow separately publishes to
