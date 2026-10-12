@@ -75,7 +75,7 @@ def load_state(serial: str | None) -> dict | None:
     if not p.is_file():
         return None
     try:
-        return json.loads(p.read_text())
+        return json.loads(p.read_text(encoding="utf-8"))
     except Exception:
         return None
 
@@ -280,6 +280,17 @@ def attach_desktop(state, *, serial=None, foreground=False, window_id=None):
     if state.get("handoff"):
         from .desktop import DesktopHandoffRequired
         raise DesktopHandoffRequired(state["handoff"])
+    if state.get("desktop_scope") == "computer":
+        if foreground or window_id is not None or state.get("background"):
+            raise ValueError("Whole-computer sessions do not support window/background overrides")
+        from .desktop_local import LocalDesktopPlatform
+        plat = LocalDesktopPlatform()
+        try:
+            plat.setup({"os": kind})
+            return plat
+        except Exception:
+            plat.teardown()
+            raise
     options = {"app": state["app"], "launch": ""}
     options.update({key: state[key] for key in ("launch", "process_name", "process_id", "new_window", "new_window_args", "background", "input_binding") if key in state})
     if kind == "mac" and state.get("background") and state.get("window_id"):

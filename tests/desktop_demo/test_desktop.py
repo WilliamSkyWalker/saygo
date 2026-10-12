@@ -126,3 +126,21 @@ class DesktopTests(unittest.TestCase):
             self.assertEqual(len(loaded['requests']),1)
             runtime.export(state['id'],Path(tmp)/'report.zip')
             self.assertTrue((Path(tmp)/'report.zip').is_file())
+
+    def test_provider_errors_are_actionable_and_do_not_echo_secrets(self):
+        from urllib.error import HTTPError, URLError
+        import io
+        client = model.VisionModel({'base_url':'https://example.com/v1','model':'vision'}, 'private-token')
+        for code, expected in [(401, 'Token'), (403, '权限'), (404, '模型'), (429, '额度'), (503, '稍后')]:
+            error = HTTPError('https://example.com', code, 'private-token', {}, io.BytesIO(b'private-token'))
+            with patch('saygo.desktop.model.build_opener') as opener:
+                opener.return_value.open.side_effect = error
+                with self.assertRaises(RuntimeError) as caught:
+                    client.complete('test', 'test')
+                self.assertIn(expected, str(caught.exception))
+                self.assertNotIn('private-token', str(caught.exception))
+        with patch('saygo.desktop.model.build_opener') as opener:
+            opener.return_value.open.side_effect = URLError('private-token')
+            with self.assertRaisesRegex(RuntimeError, '网络') as caught:
+                client.complete('test', 'test')
+            self.assertNotIn('private-token', str(caught.exception))

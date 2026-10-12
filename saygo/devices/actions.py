@@ -76,6 +76,11 @@ def prepare(platform, action, observation=None):
         action["amount"] = number(action.get("amount"), "amount", -100, 100)
     if callable(getattr(type(platform), "validate_action", None)):
         platform.validate_action(action)
+    if (kind == 'open_app' and observation
+            and callable(getattr(type(platform), 'prepare_application_launch', None))):
+        platform.prepare_application_launch(action['target'], observation)
+        action['coordinate_space'] = 'screen'
+        return action
     if observation:
         import time
         if time.time() - observation.get("at", time.time()) > 30:

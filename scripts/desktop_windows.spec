@@ -6,6 +6,8 @@ a = Analysis(
     [str(root/'saygo/desktop/app.py')],
     pathex=[str(root)],
     datas=[(str(root/'extensions/saygo-browser'), 'saygo/desktop/assets/extension'),
+           (str(root/'saygo/platforms/windows_runner.ps1'), 'saygo/platforms'),
+           (str(root/'saygo/devices/windows_no_console.cjs'), 'saygo/devices'),
            (str(root/'LICENSE'), '.')],
     hiddenimports=collect_submodules('keyring.backends'),
 )

@@ -24,11 +24,11 @@ def sessions():
     rows=[]
     for path in sorted(ds.STATE_DIR.glob("*.json")):
         try:
-            state=json.loads(path.read_text())
+            state=json.loads(path.read_text(encoding="utf-8"))
             kind=state.get("os") or state.get("kind")
             rows.append({"session":path.stem,"platform":kind,
                          "backend":state.get("browser_backend"),"device":state.get("device_id"),
-                         "app":state.get("app"),"page_id":state.get("page_id"),
+                         "app":state.get("app"),"desktop_scope":state.get("desktop_scope"),"page_id":state.get("page_id"),
                          "disconnected":state.get("disconnected",False),
                          **({"background": state["background"], "window_id": state.get("window_id")}
                             if "background" in state else {})})
@@ -84,6 +84,23 @@ def _connect(args):
     if old and (old.get("os") or old.get("kind")) != kind:
         raise ValueError("Session belongs to another platform; use a different --session")
     if kind in {"mac","windows"}:
+        if getattr(args, 'desktop_scope', None) == 'computer':
+            if args.app or getattr(args, 'background', False):
+                raise ValueError('Whole-computer control cannot be combined with an app/background binding')
+            if old and old.get('desktop_scope') != 'computer':
+                raise ValueError('Session already belongs to a window; use another session')
+            if old and old.get('handoff'):
+                return {'connected': False, 'session': serial, **old['handoff']}
+            state = {'kind': 'desktop', 'os': kind, 'desktop_scope': 'computer'}
+            plat = ds.attach_desktop(state)
+            try:
+                ds.save_state(serial, state)
+                return {'connected': True, 'session': serial, 'platform': kind,
+                        'desktop_scope': 'computer', 'screen_size': list(plat.screen_size)}
+            finally:
+                ds.release_controller(plat, kind)
+        if old and old.get('desktop_scope') == 'computer':
+            raise ValueError('Session belongs to the whole computer; use --desktop-scope computer')
         if not args.app: raise ValueError("Desktop connections require --app (window title on Windows, app name on macOS)")
         if old and old.get("app") != args.app:
             raise ValueError("Session belongs to another desktop app; use a different --session")
@@ -146,6 +163,12 @@ def _connect(args):
             plat=ds.attach_browser(serial,manage_pages=True)
         else:
             plat=ds.start(serial,"browser",browser_backend=backend)
+        if getattr(args, 'auto_page', False) and backend == 'extension':
+            pages = plat.list_pages()
+            if pages and plat.page_id not in {p['page_id'] for p in pages}:
+                # Explicit desktop-app browser access: initial observation binding only.
+                # No tab activation or input is dispatched during connection.
+                plat.bind_page(pages[0]['page_id'])
         if args.page_id:
             plat.select_page(args.page_id)
         result={"connected":True,"session":serial,"platform":"browser","backend":backend}
@@ -209,6 +232,7 @@ def register(sub):
     p.add_argument("--server-url")
     p.add_argument("--team-id")
     p.add_argument("--app")
+    p.add_argument("--desktop-scope", choices=["window", "computer"], default="window")
     p.add_argument("--background",action="store_true",help="Windows/macOS background capture and directed input; never fall back to global input")
     p.add_argument("--window-id",help="Bind a specific existing macOS background window")
     p.add_argument("--process",dest="process_name",help="Windows executable process name")

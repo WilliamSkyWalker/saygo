@@ -47,6 +47,11 @@ class ExtensionBrowserPlatform(Platform):
     def list_pages(self):
         return [dict(p, selected=p["page_id"] == self._page_id) for p in self.client.call("pages")]
 
+    def bind_page(self, page_id):
+        if page_id not in {p['page_id'] for p in self.list_pages()}:
+            raise PageSelectionError('Browser page disappeared; reconnect')
+        self._bind(page_id)
+
     def select_page(self, page_id):
         self.client.call("select", page_id=page_id)
         self._bind(page_id)

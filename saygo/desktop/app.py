@@ -18,7 +18,7 @@ def main():
     app.setApplicationName('Saygo Desktop')
     app.setApplicationDisplayName('Saygo Desktop')
     app.setOrganizationName('Saygo')
-    window = make_window()
+    window = make_window(auto_connect='--smoke-test' not in sys.argv)
     window.show()
     if '--smoke-test' in sys.argv:
         from PySide6.QtCore import QTimer
@@ -26,18 +26,19 @@ def main():
     return app.exec()
 
 
-def make_window():
-    from PySide6.QtCore import Qt, QThread, Signal
+def make_window(auto_connect=True):
+    from PySide6.QtCore import Qt, QThread, Signal, QTimer
     from PySide6.QtGui import QPixmap, QDesktopServices
     from PySide6.QtCore import QUrl
     from PySide6.QtWidgets import (QMainWindow,QWidget,QVBoxLayout,QHBoxLayout,QFormLayout,
         QTabWidget,QLineEdit,QPushButton,QLabel,QPlainTextEdit,QCheckBox,QComboBox,
         QListWidget,QListWidgetItem,QAbstractItemView,QSplitter,QFileDialog,QInputDialog,QMessageBox,
-        QDialog,QTextBrowser,QFrame)
+        QDialog,QTextBrowser,QFrame,QStackedWidget,QScrollArea,QLayout)
     from saygo.desktop.model import load_settings, load_key, save_settings, VisionModel
     from saygo.desktop.runner import TaskLoop
     from saygo.runtime import interactive
     from saygo.devices import control, service
+    from saygo.desktop import connections
 
     class Composer(QPlainTextEdit):
         submitted = Signal()
@@ -67,44 +68,39 @@ def make_window():
             self.worker = None; self.task_id = None; self.task_state = None
             self.pause_event = threading.Event(); self.stop_event = threading.Event()
             self.buttons = []; self.dialogs = {}; self.last_transcript = ''
+            self.model_job = None; self.saved_model = None
+            self.connection_worker = None; self.computer_ready = False; self.browser_ready = False
+            self.disabled_auto = set(); self.browser_pages = []; self.task_minimized = False
             shell=QWidget(); self.setCentralWidget(shell)
             body=QHBoxLayout(shell); body.setContentsMargins(0,0,0,0); body.setSpacing(0)
-            self.sidebar=QFrame(); self.sidebar.setObjectName('sidebar'); self.sidebar.setFixedWidth(230)
+            self.sidebar=QFrame(); self.sidebar.setObjectName('sidebar'); self.sidebar.setFixedWidth(224)
             self.side=QVBoxLayout(self.sidebar); self.side.setContentsMargins(18,24,18,18); self.side.setSpacing(12)
-            brand=QLabel('◉  Saygo'); brand.setObjectName('brand'); self.side.addWidget(brand)
-            self.button('＋  新对话',self.new_chat,self.side)
-            self.side.addWidget(QLabel('最近对话'))
+            brand=QLabel('saygo'); brand.setObjectName('brand'); self.side.addWidget(brand)
+            self.button('＋  新任务',self.new_chat,self.side).setObjectName('primary')
+            section=QLabel('最近任务'); section.setObjectName('muted'); self.side.addWidget(section)
             self.tasks=QListWidget(); self.tasks.setObjectName('history'); self.side.addWidget(self.tasks,1)
             self.tasks.itemClicked.connect(lambda item:self.load_task())
+            self.model_summary=QLabel('尚未配置模型'); self.model_summary.setWordWrap(True); self.model_summary.setObjectName('muted'); self.side.addWidget(self.model_summary)
             self.button('设备与连接',lambda:self.dialogs['设备连接'].show(),self.side)
             self.button('模型设置',lambda:self.dialogs['模型设置'].show(),self.side)
             body.addWidget(self.sidebar)
             self.chat=QWidget(); body.addWidget(self.chat,1)
             self.settings_page(); self.devices_page(); self.task_page()
-            self.setStyleSheet('''QMainWindow,QWidget { background:#ffffff; color:#242424; font-size:14px; font-family:"Segoe UI","Microsoft YaHei UI",sans-serif; }
-                QFrame#sidebar,QFrame#sidebar QLabel { background:#f7f7f8; }
-                QLabel#brand { font-size:25px; font-weight:700; padding-bottom:18px; }
-                QLabel#title { font-size:25px; font-weight:600; }
-                QLabel#muted { color:#777777; font-size:12px; }
-                QLineEdit,QPlainTextEdit,QComboBox { background:white; border:1px solid #dedede; border-radius:10px; padding:10px; selection-background-color:#d3e9df; }
-                QPushButton { background:#f2f2f2; border:0; border-radius:8px; padding:10px 12px; text-align:left; }
-                QPushButton:hover { background:#e7e7e7; } QPushButton:disabled { color:#aaaaaa; }
-                QPushButton#send { background:#202020; color:white; border-radius:18px; text-align:center; }
-                QPushButton#send:disabled { background:#b5b5b5; }
-                QListWidget { border:0; background:#f7f7f8; outline:0; }
-                QListWidget::item { padding:12px 6px; border-radius:6px; }
-                QListWidget::item:selected { background:#e7e7e9; color:#202020; }
-                QTextBrowser { border:0; background:white; padding:12px; }
-                QStatusBar { color:#777777; font-size:12px; border-top:1px solid #eeeeee; }
-                QFrame#composer { border:1px solid #dedede; border-radius:18px; }
-                QFrame#composer QPlainTextEdit { border:0; }
-            ''')
+            from saygo.desktop.theme import STYLESHEET
+            self.setStyleSheet(STYLESHEET)
             try:
                 data = load_settings(); self.base.setText(data['base_url']); self.model.setText(data['model'])
                 self.remember.setChecked(data.get('remember',False)); self.key.setText(load_key(data))
+                self.saved_model=self.model_snapshot()
+                self.model_feedback.setText('已加载配置。可以测试连接，确认当前服务可用。' if data.get('model') else '填写服务地址、模型和 API Token，开始配置。')
             except Exception as exc:
-                self.statusBar().showMessage(str(exc))
+                self.statusBar().showMessage(str(exc)); self.model_feedback.setText(str(exc))
+            self.update_model_summary()
             self.refresh_sessions(); self.refresh_tasks()
+            self.connection_timer = QTimer(self); self.connection_timer.setInterval(5000)
+            self.connection_timer.timeout.connect(self.poll_connections)
+            if auto_connect:
+                self.connection_timer.start(); QTimer.singleShot(0, self.poll_connections)
 
         def page(self, name, heading, description):
             dialog=QDialog(self); dialog.setWindowTitle(name); dialog.resize(820,560)
@@ -119,54 +115,165 @@ def make_window():
             layout.addWidget(button); self.buttons.append(button); return button
 
         def settings_page(self):
-            layout=self.page('模型设置','连接你的模型','支持带图像输入的 OpenAI 兼容接口。任务截图会发送至你填写的服务。')
-            form=QFormLayout(); layout.addLayout(form)
-            self.base=QLineEdit(); self.base.setPlaceholderText('https://服务地址/v1')
-            self.model=QLineEdit(); self.model.setPlaceholderText('模型名称')
+            layout=self.page('模型设置','连接你的模型','填写支持图像输入的 OpenAI 兼容接口。任务截图会发送到这个服务。')
+            form=QFormLayout(); form.setSpacing(16); layout.addLayout(form)
+            self.base=QLineEdit(); self.base.setPlaceholderText('https://api.example.com/v1')
+            self.model=QLineEdit(); self.model.setPlaceholderText('填写服务商提供的视觉模型 ID')
             self.key=QLineEdit(); self.key.setEchoMode(QLineEdit.EchoMode.Password)
-            self.remember=QCheckBox('在本机系统密钥存储中记住 API Key')
-            form.addRow('API 地址',self.base); form.addRow('模型',self.model); form.addRow('API Key',self.key); form.addRow('',self.remember)
+            self.key.setPlaceholderText('粘贴 API Token / API Key'); self.key.setAccessibleName('API Token')
+            token_row=QHBoxLayout(); token_row.addWidget(self.key,1)
+            self.reveal_key=QPushButton('显示'); self.reveal_key.setCheckable(True)
+            self.reveal_key.toggled.connect(self.toggle_key); token_row.addWidget(self.reveal_key)
+            self.remember=QCheckBox('安全保存 Token，下次启动自动加载')
+            form.addRow('服务地址',self.base); form.addRow('模型名称',self.model)
+            form.addRow('API Token',token_row); form.addRow('',self.remember)
+            help_text=QLabel('服务地址通常以 /v1 结尾，无需填写 /chat/completions。\n不勾选安全保存时，Token 仅保留在本次运行内存中。')
+            help_text.setObjectName('muted'); help_text.setWordWrap(True); layout.addWidget(help_text)
+            self.model_feedback=QLabel('填写配置后，可以发送一张测试图片检查连接。')
+            self.model_feedback.setObjectName('feedback'); self.model_feedback.setWordWrap(True); layout.addWidget(self.model_feedback)
             row=QHBoxLayout(); layout.addLayout(row)
-            self.button('保存配置',self.save_model,row); self.button('测试图像连接',self.test_model,row)
-            self.button('删除已保存的 Key',self.delete_key,row)
-            layout.addWidget(QLabel('不勾选“记住”时，Key 仅在本次运行内存中使用。无需配置 .env。'))
-            layout.addStretch()
+            self.button('保存配置',self.save_model,row).setObjectName('primary')
+            self.button('测试图像连接',self.test_model,row)
+            self.button('删除已保存的 Token',self.delete_key,row)
+            note=QLabel('连接测试会发送一张生成的测试图片，可能产生少量模型费用。')
+            note.setObjectName('muted'); note.setWordWrap(True); layout.addWidget(note); layout.addStretch()
+            self.model_fields=(self.base,self.model,self.key,self.remember,self.reveal_key)
+            for field in (self.base,self.model,self.key):field.textChanged.connect(self.model_edited)
+            self.remember.toggled.connect(self.model_edited)
+            self.dialogs['模型设置'].finished.connect(lambda _:self.reveal_key.setChecked(False))
+
+        def toggle_key(self, visible):
+            self.key.setEchoMode(QLineEdit.EchoMode.Normal if visible else QLineEdit.EchoMode.Password)
+            self.reveal_key.setText('隐藏' if visible else '显示')
 
         def model_values(self):
-            return {'base_url':self.base.text().strip(),'model':self.model.text().strip()}, self.key.text()
+            return {'base_url':self.base.text().strip(),'model':self.model.text().strip()}, self.key.text().strip()
+
+        def model_snapshot(self):
+            settings,key=self.model_values()
+            return (settings['base_url'],settings['model'],key,self.remember.isChecked())
+
+        def update_model_summary(self):
+            name=self.model.text().strip()
+            self.model_summary.setText('当前模型 · '+name if name else '尚未配置模型')
+            self.model_summary.setToolTip(name)
+
+        def model_edited(self, *_):
+            self.update_model_summary()
+            self.model_feedback.setText('配置已修改，尚未保存或测试。' if self.model_snapshot()!=self.saved_model else '与已保存配置一致；连接状态尚未验证。')
+
+        def checked_model_values(self):
+            from saygo.desktop.model import validate
+            try:
+                settings,key=self.model_values(); settings=validate(settings)
+                if not key:raise ValueError('请填写 API Token。')
+                if any(char.isspace() for char in key):raise ValueError('Token 中包含空白字符，请重新粘贴完整 Token。')
+                return settings,key
+            except ValueError as exc:
+                self.model_feedback.setText(str(exc)); self.dialogs['模型设置'].show()
+                return None
 
         def save_model(self):
-            settings,key=self.model_values(); remember=self.remember.isChecked()
-            self.job(lambda emit: (save_settings(settings,key,remember), {'message':'模型配置已保存'})[1])
+            if self.worker or self.connection_worker:return
+            values=self.checked_model_values()
+            if values is None:return
+            settings,key=values; remember=self.remember.isChecked()
+            self.model_job='save'; self.model_feedback.setText('正在保存配置…')
+            message='配置已保存；Token 已保存到系统密钥存储。' if remember else '配置已保存；Token 仅在本次运行中使用。'
+            self.job(lambda emit: (save_settings(settings,key,remember), {'message':message,'model_operation':'save'})[1])
 
         def test_model(self):
-            settings,key=self.model_values()
-            self.job(lambda emit: VisionModel(settings,key).test())
+            if self.worker or self.connection_worker:return
+            values=self.checked_model_values()
+            if values is None:return
+            settings,key=values; self.model_job='test'; self.model_feedback.setText('正在发送测试图片，请稍候…')
+            self.job(lambda emit: {**VisionModel(settings,key).test(),'model_operation':'test'})
 
         def delete_key(self):
-            from saygo.desktop.model import secure_backend, credential_id
+            if self.worker or self.connection_worker:return
+            from saygo.desktop.model import secure_backend, credential_id, validate
             settings,key=self.model_values()
+            try:settings=validate(settings)
+            except ValueError as exc:
+                self.model_feedback.setText(str(exc)); return
             def remove(emit):
                 backend=secure_backend(); ident=credential_id(settings)
                 if backend.get_password('Saygo Desktop',ident): backend.delete_password('Saygo Desktop',ident)
                 save_settings(settings,'',False)
-                return {'message':'已删除系统密钥；当前输入框内容仍仅在内存中'}
-            self.remember.setChecked(False); self.job(remove)
+                return {'message':'当前服务的 Token 已从系统存储和输入框中删除。','model_operation':'delete'}
+            self.model_job='delete'; self.model_feedback.setText('正在删除当前服务的 Token…'); self.job(remove)
 
         def devices_page(self):
-            layout=self.page('设备连接','选择操作目标','命名会话与 CLI、MCP 共用。浏览器使用扩展连接；桌面窗口支持 Windows 和 macOS。')
-            form=QFormLayout(); layout.addLayout(form)
-            self.platform=QComboBox(); self.platform.addItems(['browser','desktop','android','ios'])
-            self.session=QLineEdit('desktop-web'); self.target=QLineEdit(); self.target.setPlaceholderText('桌面：窗口标题或 App 名；手机：设备 ID；浏览器：留空')
-            self.page_id=QComboBox(); self.page_id.addItem('先连接浏览器，再选择网页',None)
-            self.background=QCheckBox('Windows / macOS 后台输入（macOS 需已打开窗口；不支持的动作会报错）')
-            form.addRow('平台',self.platform); form.addRow('会话名称',self.session); form.addRow('目标',self.target); form.addRow('浏览器页面',self.page_id); form.addRow('',self.background)
-            row=QHBoxLayout(); layout.addLayout(row)
+            layout=self.page('设备连接','这台电脑与浏览器','本机自动连接。Saygo 会根据任务选择应用和操作方式；浏览器连接后自动加入可用目标。')
+            self.computer_status=QLabel('本机电脑 · 正在检测…'); self.computer_status.setWordWrap(True); layout.addWidget(self.computer_status)
+            self.button('重新检测本机',lambda:self.poll_connections(retry_computer=True),layout)
+            self.browser_status=QLabel('Chrome 浏览器 · 尚未连接'); self.browser_status.setWordWrap(True); layout.addWidget(self.browser_status)
+            self.button('连接 Chrome / 安装扩展',self.install_bridge,layout).setObjectName('primary')
+            help_text=QLabel('首次连接会打开 Chrome 插件安装页。安装后打开 Saygo Browser 扩展，点击 Connect local bridge；连接状态会自动更新。')
+            help_text.setWordWrap(True); help_text.setObjectName('muted'); layout.addWidget(help_text)
+            self.advanced=QWidget(); advanced_layout=QVBoxLayout(self.advanced)
+            self.button('高级连接：指定窗口或其他设备',lambda:self.advanced.setVisible(not self.advanced.isVisible()),layout)
+            layout.addWidget(self.advanced); self.advanced.hide()
+            form=QFormLayout(); advanced_layout.addLayout(form)
+            self.platform=QComboBox(); self.platform.addItems(['desktop','android','ios','browser'])
+            self.session=QLineEdit('custom-target'); self.target=QLineEdit(); self.target.setPlaceholderText('窗口标题、App 名或设备 ID')
+            self.page_id=QComboBox(); self.page_id.addItem('自动连接的浏览器无需在此配置',None)
+            self.background=QCheckBox('后台窗口模式（不支持的动作会报错）')
+            form.addRow('平台',self.platform); form.addRow('会话名称',self.session); form.addRow('目标',self.target); form.addRow('网页',self.page_id); form.addRow('',self.background)
+            row=QHBoxLayout(); advanced_layout.addLayout(row)
             self.button('扫描设备 / 窗口',lambda:self.job(lambda emit:control.discover('all')),row)
-            self.button('连接 / 选择页面',self.connect_device,row)
-            self.button('安装浏览器桥接',self.install_bridge,row)
-            self.button('查看已保存会话',lambda:self.job(lambda emit:{'sessions':control.sessions()}),row)
-            self.device_output=QPlainTextEdit(); self.device_output.setReadOnly(True); layout.addWidget(self.device_output)
+            self.button('连接',self.connect_device,row)
+            self.device_output=QPlainTextEdit(); self.device_output.setReadOnly(True); advanced_layout.addWidget(self.device_output)
+            layout.addStretch()
+
+        def poll_connections(self, retry_computer=False):
+            if self.worker or self.connection_worker:return
+            if self.task_state and self.task_state['status'] not in ('succeeded','cancelled','failed'):return
+            need_computer=retry_computer or not self.computer_ready
+            def poll(emit):
+                result={}
+                if need_computer:
+                    try:
+                        value=connections.connect_computer()
+                        result['computer_ready']=bool(value.get('connected'))
+                        result['computer_message']='本机电脑 · 已连接，可操作整个桌面' if value.get('connected') else value.get('instructions','本机电脑 · 等待连接')
+                    except Exception as exc:
+                        result.update(computer_ready=False,computer_message='本机电脑 · '+str(exc))
+                status=connections.browser_status()
+                result['browser_ready']=False
+                result['browser_message']=status.get('message','')
+                result['pages']=status.get('pages',[])
+                if status.get('connected'):
+                    try:
+                        value=connections.connect_browser(status)
+                        result['browser_ready']=bool(value.get('connected') and value.get('page_id'))
+                        result['browser_message']='已连接 · '+str(len(status['pages']))+' 个网页，Saygo 可自行切换' if result['browser_ready'] else '扩展已连接 · 请在 Chrome 打开一个网页'
+                    except Exception as exc:
+                        result['browser_message']='已检测到扩展 · '+str(exc)
+                return result
+            self.start_connection_job(poll)
+
+        def start_connection_job(self, function):
+            if self.worker or self.connection_worker:return
+            self.connection_worker=Worker(function)
+            self.connection_worker.result.connect(self.connection_result)
+            self.connection_worker.failed.connect(lambda message:self.browser_status.setText('Chrome 浏览器 · '+message))
+            self.connection_worker.finished.connect(self.connection_done)
+            self.send_button.setEnabled(False)
+            self.connection_worker.start()
+
+        def connection_result(self, result):
+            if 'computer_ready' in result:
+                self.computer_ready=result['computer_ready']; self.computer_status.setText(result['computer_message'])
+            if 'browser_ready' in result:
+                self.browser_ready=result['browser_ready']; self.browser_pages=result.get('pages',[])
+                self.browser_status.setText('Chrome 浏览器 · '+result['browser_message'])
+            if 'message' in result:self.browser_status.setText(result['message'])
+            self.refresh_sessions()
+
+        def connection_done(self):
+            worker=self.connection_worker; self.connection_worker=None; worker.deleteLater()
+            self.send_button.setEnabled(True)
 
         def connect_device(self):
             from argparse import Namespace
@@ -178,24 +285,27 @@ def make_window():
             self.job(lambda emit:control.connect(args))
 
         def install_bridge(self):
+            if self.worker or self.connection_worker:return
+            self.browser_status.setText('正在准备浏览器连接并打开 Chrome…')
             def install(emit):
-                from saygo.integrations.browser_setup import setup, STORE_EXTENSION_ID, STORE_EXTENSION_URL
-                from saygo.integrations.browser_bridge import atomic_json
-                from saygo.platforms import device_session as ds
-                result=setup(STORE_EXTENSION_ID)
-                ds.STATE_DIR.parent.mkdir(parents=True,exist_ok=True); atomic_json(ds.STATE_DIR.parent/'browser-bridge.json',result)
-                return {'message':'从 Chrome 网上应用店安装 Saygo Browser，然后打开扩展弹窗点击 Connect local bridge。如果之前使用开发版，请先在浏览器中手动断开并停用旧扩展。',
-                        'extension_id':STORE_EXTENSION_ID,'extension_url':STORE_EXTENSION_URL,**result}
-            self.job(install)
+                status=connections.browser_status()
+                if status.get('connected'):
+                    value=connections.connect_browser(status)
+                    return {'browser_ready':bool(value.get('connected') and value.get('page_id')),
+                            'pages':status.get('pages',[]),'browser_message':'扩展已连接'}
+                return {'message':connections.install_browser()}
+            self.start_connection_job(install)
 
         def task_page(self):
-            layout=QVBoxLayout(self.chat); layout.setContentsMargins(30,20,30,16); layout.setSpacing(12)
+            layout=QVBoxLayout(self.chat); layout.setContentsMargins(36,28,36,18); layout.setSpacing(16)
             header=QHBoxLayout(); layout.addLayout(header)
-            title=QLabel('Saygo'); title.setObjectName('title'); header.addWidget(title); header.addStretch()
+            title=QLabel('任务空间'); title.setObjectName('title'); header.addWidget(title); header.addStretch()
             self.button('操作画面',lambda:self.preview_dialog.show(),header)
             self.button('导出对话',self.export_task,header)
-            self.task_status=QLabel('新对话'); self.task_status.setObjectName('muted'); layout.addWidget(self.task_status)
-            self.timeline=QTextBrowser(); self.timeline.setOpenExternalLinks(False); layout.addWidget(self.timeline,1)
+            self.task_status=QLabel('新对话'); self.task_status.setObjectName('badge'); layout.addWidget(self.task_status)
+            self.content=QStackedWidget(); layout.addWidget(self.content,1)
+            self.timeline=QTextBrowser(); self.timeline.setOpenExternalLinks(False); self.content.addWidget(self.timeline)
+            self.build_welcome()
             self.preview_dialog=QDialog(self); self.preview_dialog.setWindowTitle('最新操作画面'); self.preview_dialog.resize(860,600)
             preview_layout=QVBoxLayout(self.preview_dialog)
             self.preview=QLabel('执行任务后，这里显示最新观察画面'); self.preview.setMinimumSize(400,260)
@@ -206,46 +316,91 @@ def make_window():
             self.resolve_button=self.button('核对操作结果',self.resolve_task,actions); actions.addStretch()
             self.button('选择操作目标',lambda:self.targets_dialog.show(),actions)
             self.targets_dialog=QDialog(self); self.targets_dialog.setWindowTitle('选择操作目标'); self.targets_dialog.resize(420,400)
-            targets=QVBoxLayout(self.targets_dialog); targets.addWidget(QLabel('选择本次任务可以操作的会话（可多选）'))
+            targets=QVBoxLayout(self.targets_dialog); targets.addWidget(QLabel('本机与已连接浏览器默认可用；可取消不希望本次任务操作的目标。'))
             self.sessions=QListWidget(); self.sessions.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection); targets.addWidget(self.sessions)
-            self.button('刷新列表',self.refresh_sessions,targets)
+            self.button('设备与连接',lambda:self.dialogs['设备连接'].show(),targets)
             self.button('完成',self.targets_dialog.accept,targets)
-            frame=QFrame(); frame.setObjectName('composer'); composer=QVBoxLayout(frame); layout.addWidget(frame)
+            frame=QFrame(); frame.setObjectName('composer'); composer=QVBoxLayout(frame); composer.setContentsMargins(18,12,18,12); composer.setSpacing(8); layout.addWidget(frame)
             self.goal=Composer(); self.goal.submitted.connect(self.send_message)
             self.goal.setPlaceholderText('给 Saygo 发送任务…'); self.goal.setFixedHeight(80); composer.addWidget(self.goal)
             bottom=QHBoxLayout(); composer.addLayout(bottom)
-            self.target_label=QLabel('请先选择操作目标'); self.target_label.setObjectName('muted'); bottom.addWidget(self.target_label,1)
+            self.target_label=QLabel('请先选择操作目标'); self.target_label.setObjectName('muted'); self.target_label.setWordWrap(True); bottom.addWidget(self.target_label,1)
             self.send_button=self.button('发送  ↑',self.send_message,bottom); self.send_button.setObjectName('send')
-            self.sessions.itemSelectionChanged.connect(self.update_target_label)
+            self.sessions.itemSelectionChanged.connect(self.target_selection_changed)
             hint=QLabel('Enter 发送 · Shift + Enter 换行 · Saygo 会根据截图操作你选择的设备'); hint.setObjectName('muted')
             hint.setAlignment(Qt.AlignmentFlag.AlignCenter); layout.addWidget(hint)
             self.welcome()
 
+        def build_welcome(self):
+            self.welcome_page=QScrollArea(); self.welcome_page.setWidgetResizable(True); self.welcome_page.setFrameShape(QFrame.Shape.NoFrame)
+            welcome_body=QWidget(); welcome_body.setObjectName('welcomeBody'); self.welcome_page.setWidget(welcome_body)
+            column=QVBoxLayout(welcome_body); column.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
+            column.setContentsMargins(24,12,24,12); column.setSpacing(10); column.addStretch()
+            mark=QLabel('S'); mark.setObjectName('welcomeMark'); mark.setFixedSize(44,44)
+            mark.setAlignment(Qt.AlignmentFlag.AlignCenter); column.addWidget(mark,0,Qt.AlignmentFlag.AlignHCenter)
+            title=QLabel('从一个想法，开始行动'); title.setObjectName('welcomeTitle')
+            title.setAlignment(Qt.AlignmentFlag.AlignCenter); column.addWidget(title)
+            subtitle=QLabel('告诉 Saygo 你想完成什么，随时查看过程、暂停或接管。')
+            subtitle.setObjectName('muted'); subtitle.setWordWrap(True)
+            subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter); column.addWidget(subtitle)
+            column.addSpacing(4)
+            for title,detail,callback in [
+                ('01   配置模型','连接你的视觉模型，安全管理 API Token',lambda:self.dialogs['模型设置'].show()),
+                ('02   电脑与浏览器','本机自动接入，按需连接 Chrome',lambda:self.dialogs['设备连接'].show()),
+                ('03   描述任务','从观察当前画面开始',lambda:self.fill_example())]:
+                card=self.button(title+'\n'+detail,callback,column); card.setObjectName('welcomeCard'); card.setMinimumHeight(60)
+            column.addStretch(); self.content.addWidget(self.welcome_page)
+
+        def fill_example(self):
+            self.goal.setPlainText('请观察当前画面，告诉我有哪些可以操作的内容。')
+            self.goal.setFocus()
+
         def welcome(self):
             self.last_transcript=''
             for button in (self.pause_button,self.stop_button,self.resolve_button):button.hide()
-            self.timeline.setHtml('<div style="text-align:center;margin-top:100px"><h1>今天想完成什么？</h1>'
-                '<p style="color:#777">把任务交给 Saygo，一起观察每一步。</p>'
-                '<p style="color:#999">连接模型和设备后，在下方描述你的任务。</p></div>')
+            self.content.setCurrentWidget(self.welcome_page)
 
         def new_chat(self):
-            if self.worker:return
+            if self.worker or self.connection_worker:return
             if self.task_state and self.task_state['status'] not in ('succeeded','cancelled'):
                 QMessageBox.information(self,'任务尚未结束','请先停止当前任务，再开始新对话。'); return
             self.task_id=None; self.task_state=None; self.goal.clear(); self.preview.clear()
             self.task_status.setText('新对话'); self.welcome()
+
+        def target_selection_changed(self):
+            for index in range(self.sessions.count()):
+                item=self.sessions.item(index); serial=item.data(Qt.ItemDataRole.UserRole)
+                if serial in (connections.COMPUTER,connections.BROWSER):
+                    if item.isSelected():self.disabled_auto.discard(serial)
+                    else:self.disabled_auto.add(serial)
+            self.update_target_label()
 
         def update_target_label(self):
             names=[item.text() for item in self.sessions.selectedItems()]
             self.target_label.setText(' · '.join(names) if names else '请先选择操作目标')
 
         def refresh_sessions(self):
-            selected={item.text() for item in self.sessions.selectedItems()}
-            self.sessions.clear()
+            selected={item.data(Qt.ItemDataRole.UserRole) for item in self.sessions.selectedItems()}
+            self.sessions.blockSignals(True); self.sessions.clear()
             for row in control.sessions():
-                if not row.get('disconnected') and not row.get('error') and (row.get('platform')!='browser' or row.get('backend')=='extension'):
-                    item=QListWidgetItem(row['session']); self.sessions.addItem(item); item.setSelected(row['session'] in selected)
-            self.update_target_label()
+                serial=row['session']
+                if row.get('disconnected') or row.get('error'):continue
+                if serial==connections.COMPUTER:
+                    if not self.computer_ready:continue
+                    label='本机电脑 · 整个桌面'
+                elif serial==connections.BROWSER:
+                    if not self.browser_ready:continue
+                    label='Chrome 浏览器 · '+str(len(self.browser_pages))+' 个网页'
+                elif row.get('platform')=='browser':
+                    if row.get('backend')!='extension' or not row.get('page_id'):continue
+                    label='浏览器 · '+serial+'（已保存）'
+                else:
+                    label=('窗口 · ' if row.get('app') else '设备 · ')+(row.get('app') or row.get('device') or serial)
+                item=QListWidgetItem(label); item.setData(Qt.ItemDataRole.UserRole,serial)
+                item.setToolTip(label+'\n会话：'+serial); self.sessions.addItem(item)
+                default=serial in (connections.COMPUTER,connections.BROWSER) and serial not in self.disabled_auto
+                item.setSelected(serial in selected or default)
+            self.sessions.blockSignals(False); self.update_target_label()
 
         def refresh_tasks(self):
             self.tasks.clear()
@@ -258,7 +413,7 @@ def make_window():
                 if row['id']==self.task_id:self.tasks.setCurrentItem(item)
 
         def send_message(self):
-            if self.worker:return
+            if self.worker or self.connection_worker:return
             if not self.goal.toPlainText().strip():return
             if self.task_state and self.task_state['status'] in ('waiting_for_human','idle'):
                 self.resume_task(self.goal.toPlainText().strip()); return
@@ -267,31 +422,37 @@ def make_window():
             self.start_task()
 
         def start_task(self):
-            settings,key=self.model_values(); goal=self.goal.toPlainText().strip()
-            bindings={f'target_{i+1}':item.text() for i,item in enumerate(self.sessions.selectedItems())}
+            values=self.checked_model_values()
+            if values is None:return
+            settings,key=values; goal=self.goal.toPlainText().strip()
+            bindings={f'target_{i+1}':item.data(Qt.ItemDataRole.UserRole) for i,item in enumerate(self.sessions.selectedItems())}
             if not bindings:
                 self.targets_dialog.show(); self.statusBar().showMessage('选择至少一个操作目标，然后发送任务'); return
             if not settings['model'] or not key:
                 self.dialogs['模型设置'].show(); self.statusBar().showMessage('请先填写模型和 API Key'); return
             self.goal.clear()
+            self.minimize_for_computer(bindings.values())
             def start(emit):
                 loop=TaskLoop(VisionModel(settings,key)); state=loop.create(goal,bindings); emit(state)
                 return loop.run(state['id'],self.pause_event,self.stop_event,emit)
             self.job(start,loop=True)
 
         def load_task(self):
-            if self.worker:return
+            if self.worker or self.connection_worker:return
             item=self.tasks.currentItem()
             task_id=item.data(Qt.ItemDataRole.UserRole) if item else None
             if task_id: self.job(lambda emit:interactive.call('recover',task_id))
 
         def resume_task(self, note=None):
             if not self.task_id: return
-            settings,key=self.model_values(); task_id=self.task_id
+            values=self.checked_model_values()
+            if values is None:return
+            settings,key=values; task_id=self.task_id
             if note is None:
                 note,ok=QInputDialog.getText(self,'继续任务','人工操作或核对说明：',text='已核对，可以继续')
                 if not ok or not note.strip(): return
             self.goal.clear()
+            self.minimize_for_computer(spec['session'] for spec in self.task_state['workflow']['resources'].values())
             def resume(emit):
                 loop=TaskLoop(VisionModel(settings,key)); state=loop.runtime.store.get(task_id)
                 if state['status']=='waiting_for_human': loop.runtime.resume_task(task_id,note)
@@ -328,10 +489,18 @@ def make_window():
             elif self.task_id:
                 task_id=self.task_id; self.job(lambda emit:interactive.call('cancel',task_id,note='用户停止'))
 
+        def minimize_for_computer(self, sessions):
+            from saygo.platforms import device_session as ds
+            if any((ds.load_state(serial) or {}).get('desktop_scope')=='computer' for serial in sessions):
+                for dialog in self.dialogs.values():dialog.hide()
+                self.targets_dialog.hide(); self.preview_dialog.hide()
+                self.task_minimized=True; self.showMinimized()
+
         def job(self, function, loop=False):
-            if self.worker:return
+            if self.worker or self.connection_worker:return
             self.pause_event.clear(); self.stop_event.clear()
             self.goal.setEnabled(False); self.tasks.setEnabled(False)
+            for field in self.model_fields:field.setEnabled(False)
             for button in self.buttons:button.setEnabled(False)
             self.pause_button.setEnabled(loop); self.stop_button.setEnabled(loop)
             self.worker=Worker(function); self.worker.result.connect(self.show_result); self.worker.update.connect(self.show_result)
@@ -339,20 +508,32 @@ def make_window():
             self.statusBar().showMessage('正在执行…'); self.worker.start()
 
         def job_done(self):
-            worker=self.worker; self.worker=None; worker.deleteLater()
+            worker=self.worker; self.worker=None; worker.deleteLater(); self.model_job=None
+            for field in self.model_fields:field.setEnabled(True)
             self.goal.setEnabled(True); self.tasks.setEnabled(True)
             for button in self.buttons:button.setEnabled(True)
             self.pause_button.setEnabled(True);self.stop_button.setEnabled(True)
             self.refresh_sessions();self.refresh_tasks()
+            if self.task_minimized:
+                self.task_minimized=False; self.showNormal(); self.raise_()
 
         def show_error(self,message):
             self.statusBar().showMessage(message)
+            if self.model_job:
+                self.model_feedback.setText('操作未完成：'+message)
+                return
             QMessageBox.warning(self,'操作未完成',message)
             if self.task_id:
                 self.show_result(interactive.call('status',self.task_id))
 
         def show_result(self,value):
             if not isinstance(value,dict):return
+            if value.get('model_operation'):
+                if value['model_operation']=='delete':
+                    self.key.clear(); self.remember.setChecked(False)
+                if value['model_operation'] in ('save','delete'):self.saved_model=self.model_snapshot()
+                self.model_feedback.setText(value['message']); self.statusBar().showMessage(value['message'])
+                return
             if value.get('mode')=='interactive':
                 self.task_id=value['id']; self.task_state=value
                 self.pause_button.setVisible(value['status']=='idle')
@@ -380,12 +561,13 @@ def make_window():
                 self.statusBar().showMessage(value.get('message') or value.get('error') or '操作完成')
 
         def render_conversation(self,state,rows):
+            self.content.setCurrentWidget(self.timeline)
             def bubble(role,text):
                 user=role=='你'
                 return ('<table width="100%" cellspacing="0" cellpadding="14"><tr>'
                         + ('<td width="16%"></td>' if user else '')
-                        + '<td bgcolor="'+('#f4f4f4' if user else '#ffffff')+'">'
-                        + '<p style="color:#888;font-size:12px">'+role+'</p>'
+                        + '<td bgcolor="'+('#eaf2ee' if user else '#f4f6f8')+'">'
+                        + '<p style="color:#587065;font-size:12px;font-weight:600">'+role+'</p>'
                         + '<p style="line-height:150%">'+escape(str(text)).replace('\n','<br>')+'</p></td></tr></table><br>')
             content=bubble('你',state.get('desktop_goal',''))
             for row in rows:
@@ -403,7 +585,7 @@ def make_window():
             self.goal.setPlaceholderText('回复 Saygo，补充说明并继续任务…' if state['status'] in ('waiting_for_human','idle') else '给 Saygo 发送新任务…')
 
         def closeEvent(self,event):
-            if self.worker:
+            if self.worker or self.connection_worker:
                 self.stop_event.set(); event.ignore()
                 self.statusBar().showMessage('正在停止；当前调用结束后可关闭窗口')
             else:event.accept()

@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from urllib.parse import urlsplit
 from urllib.request import Request, build_opener, HTTPRedirectHandler
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 
 
 def settings_path():
@@ -14,7 +14,7 @@ def settings_path():
 
 
 def validate(settings):
-    url = settings['base_url'].rstrip('/')
+    url = settings['base_url'].strip().rstrip('/')
     parsed = urlsplit(url)
     if parsed.username or parsed.password or parsed.query or parsed.fragment or not parsed.hostname:
         raise ValueError('API 地址不能包含密码、查询参数或片段')
@@ -87,7 +87,14 @@ class VisionModel:
                 data = json.loads(response.read(4*1024*1024))
         except HTTPError as exc:
             # Provider bodies can echo credentials; never show/log them.
-            raise RuntimeError(f'模型服务返回 HTTP {exc.code}，请检查地址、Key 和模型权限') from None
+            messages = {401:'Token 无效或已过期，请检查 API Token',
+                        403:'没有访问权限，请检查 Token 和模型授权',
+                        404:'接口或模型不存在，请检查服务地址和模型名称',
+                        429:'请求受限或额度不足，请检查服务商配额后重试'}
+            message = messages.get(exc.code, '模型服务暂时不可用，请稍后重试' if exc.code >= 500 else '模型请求被拒绝，请检查接口与图像输入支持')
+            raise RuntimeError(f'{message}（HTTP {exc.code}）') from None
+        except (URLError, TimeoutError):
+            raise RuntimeError('无法连接模型服务或请求超时，请检查服务地址和网络') from None
         return data['choices'][0]['message']['content']
 
     def test(self):
