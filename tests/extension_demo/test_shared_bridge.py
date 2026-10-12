@@ -17,7 +17,7 @@ from saygo.integrations.browser_bridge import atomic_json, read_frame, write_fra
 class SharedBridgeTests(unittest.TestCase):
     def test_native_windows_fresh_install_uses_the_wsl_default(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             local = root / 'AppData/Local'
             expected = local / 'Saygo/browser-bridge'
             with patch('pathlib.Path.home', return_value=root), \
@@ -33,7 +33,9 @@ class SharedBridgeTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(prefix='saygo shared 中文 ')
         self.addCleanup(temporary.cleanup)
-        self.root = Path(temporary.name)
+        # Windows runners may spell TEMP with an 8.3 user alias (RUNNER~1).
+        # Production OS discovery returns canonical paths; injected layouts must too.
+        self.root = Path(temporary.name).resolve()
         self.standard = self.root / 'AppData/Local/Saygo/browser-bridge'
         self.legacy = self.root / '.saygo/browser-bridge'
         self.registration = self.root / 'registry/com.saygo.browser.json'
