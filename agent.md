@@ -4,6 +4,8 @@
 Shared repository guidance for programming agents and human contributors.
 Use this document with the client’s own instruction-loading mechanism; the filename
 `agent.md` does not imply automatic discovery by every client.
+Mandatory change, commit and verification rules also live in
+[`AGENTS.md`](AGENTS.md), which clients with automatic instruction discovery load.
 End-user visual operation instructions live in
 [`plugins/saygo-device/skills/device/SKILL.md`](plugins/saygo-device/skills/device/SKILL.md).
 
@@ -18,7 +20,22 @@ Saygo 为外部编程 Agent 提供跨手机、浏览器和桌面窗口的视觉�
 - **saygo 主仓是 Public(GitHub)**。写进代码/注释/docstring/README/agent.md/示例的一切都**必须脱敏**：禁止真实包名/bundle id、产品名、Apple team-id、公司名、真账号/邮箱、API key/token。一律用占位符：`com.example.app` / `你的 team id` / `${EMAIL}` / 通用描述。commit **message 本身**也脱敏。
 - 真值只放 **gitignored** 文件：`.env` / `tests/<t>/_accounts.json` / `.saygo/mcp_clients.json` —— 从未入库，保持如此。
 - 私有 `tests/<target>/` 默认被 .gitignore 排除；公开 `*_demo` 和 `_template` 是例外。**客户测试用例是独立私有仓**(嵌套在 `tests/<target>/`，自己的 .git，push 用普通 `git push`，别 force)——它是客户内容不适用上面的公开脱敏，但**别和 saygo 主仓搞混**。
-- saygo 主仓默认分支为 `main`；按用户授权执行提交和推送，message 简洁。不得添加虚假的模型身份或固定某个供应商的协作者署名。
+- saygo 主仓默认分支为 `main`；按用户授权执行提交和推送。标题清楚、正文完整，必须解释全部修改点及目的，不能仅写一句标题。不得添加虚假的模型身份或固定某个供应商的协作者署名。
+
+## 修改、提交与验收规范
+
+- 开工前读取用户持久约束及工作区状态；用户叫停后立即停止。保留已有改动，按功能划分提交。commit、push 授权不代表升版或发布授权。
+- 提交正文使用中文，覆盖五项：触发问题与修改目的；所有实质修改及逐项理由；新旧行为和兼容性；实际测试命令、平台、数量和结果；剩余限制与部署状态。源码、测试、CI、打包及文档均不得漏写。
+- 内容以最终 staged diff 为准；禁止“优化”“完善”“修复若干问题”代替具体说明。长正文通过文件传给 `git commit -F`，提交前检查 diff，提交后核对正文，push 后核实远端结果。
+- 修复缺陷需补能复现原问题的回归测试。连接及升级覆盖新装、重复安装、旧配置、桌面/WSL 共存、客户端重启、断连、过期页面和多连接冲突；不能用重复用例凑数量。
+- Windows 桌面版、Windows Python 和 WSL 共用浏览器所在系统的 bridge 发现与安装目录；升级同时检查实际注册、在线 host 与客户端配置，不能仅比较包版本。
+- 不自动断开插件或重启在线 host；已有会话的明确页面绑定不得暗中替换。动作超时先观察核对，禁止盲目重放。
+- 状态文件存在不代表连接成功；必须有请求响应。声称已截图必须实际取得并检查图片；声称动作成功必须核验结果。
+- 分开记录 Windows、macOS、Android、iOS、Chrome 扩展和 Playwright 的验收范围。真实端到端必须经过公共入口、实际传输与真实设备/浏览器；mock、skip 和单平台结果不能冒充六端通过。
+- 测试使用隔离目录、profile、命名会话和测试页面；不得借业务会话测试输入。缺设备、权限或依赖时说明具体未完成项，源码修复和安装版交付分别报告。
+
+完整规则与提交模板见 [AGENTS.md](AGENTS.md)；桌面提交修改说明示例见
+[docs/desktop-change-0219ef3.md](docs/desktop-change-0219ef3.md)。
 
 ## 统一操作服务与 Runtime
 
