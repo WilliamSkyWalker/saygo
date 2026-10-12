@@ -160,3 +160,60 @@ class PackageUpdateTests(unittest.TestCase):
 
 
 ORIGINAL_CURRENT=u.current
+
+
+class PackageBridgeSyncTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.installed = {'python':sys.executable, 'version':'0.4.14', 'browser':'chrome',
+                          'extension_id':'a' * 32, 'bridge':{'directory':'old/Saygo/browser-bridge'}}
+        u.write(self.root/'installation.json', self.installed)
+
+    @scenario('UPDATE-019','Python 包版本相同，但桌面版在线 bridge 与安装记录不同','同步 package bridge',
+              '先发现共享目录再修复注册与安装记录，不因版本相同跳过')
+    def test_same_package_version_still_repairs_a_changed_shared_directory(self):
+        repaired = {'directory':'shared/.saygo/browser-bridge', 'installed':True}
+        with patch.object(u.subprocess, 'check_output', side_effect=[json.dumps(repaired), json.dumps(repaired)]) as call:
+            u.synchronize_package_bridge(self.root, self.installed)
+        self.assertEqual(call.call_count, 2)
+        self.assertIn('--resolve-only', call.call_args_list[0].args[0])
+        self.assertNotIn('--resolve-only', call.call_args_list[1].args[0])
+        self.assertEqual(u.read(self.root/'installation.json')['bridge'], repaired)
+
+    @scenario('UPDATE-019','包版本、共享目录、实际注册与安装记录全部一致','同步 package bridge',
+              '只执行只读发现，不重复安装 native host 或改写安装记录')
+    def test_matching_shared_directory_and_package_version_do_not_reinstall(self):
+        resolved = {**self.installed['bridge'], 'registered_directory':self.installed['bridge']['directory']}
+        with patch.object(u.subprocess, 'check_output', return_value=json.dumps(resolved)) as call:
+            u.synchronize_package_bridge(self.root, self.installed)
+        self.assertEqual(call.call_count, 1)
+        self.assertEqual(u.read(self.root/'installation.json'), self.installed)
+
+    @scenario('UPDATE-019','包版本与在线目录一致，但浏览器实际注册指向另一目录','同步 package bridge',
+              '修复实际注册，避免下次插件连接进入另一套 bridge')
+    def test_matching_version_and_live_directory_still_repair_stale_registration(self):
+        resolved = {**self.installed['bridge'], 'registered_directory':'another/bridge'}
+        with patch.object(u.subprocess, 'check_output', side_effect=[json.dumps(resolved), json.dumps(self.installed['bridge'])]) as call:
+            u.synchronize_package_bridge(self.root, self.installed)
+        self.assertEqual(call.call_count, 2)
+
+    @scenario('UPDATE-019','外部升级 Python 包后共享 bridge 目录不变','同步 package bridge',
+              '更新 host 安装及版本记录，不因目录相同漏掉升级')
+    def test_package_upgrade_updates_host_even_when_directory_is_unchanged(self):
+        current = dict(self.installed, version='0.4.15')
+        with patch.object(u.subprocess, 'check_output', return_value=json.dumps(self.installed['bridge'])) as call:
+            u.synchronize_package_bridge(self.root, current)
+        self.assertEqual(call.call_count, 2)
+        self.assertEqual(u.read(self.root/'installation.json')['version'], '0.4.15')
+
+    @scenario('UPDATE-019','共享 bridge 发现失败或繁忙','同步 package bridge',
+              '保留原安装记录并报告更新待完成，不擅自建立第二套 bridge')
+    def test_discovery_failure_preserves_installation_and_reports_pending(self):
+        with patch.object(u.subprocess, 'check_output', side_effect=OSError('bridge busy')) as call, \
+             contextlib.redirect_stderr(io.StringIO()) as errors:
+            u.synchronize_package_bridge(self.root, self.installed)
+        self.assertEqual(call.call_count, 1)
+        self.assertEqual(u.read(self.root/'installation.json'), self.installed)
+        self.assertIn('Native host update pending', errors.getvalue())

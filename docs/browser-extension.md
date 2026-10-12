@@ -39,6 +39,22 @@ Use `--client claude`, `both`, or another supported client as needed; add
 `--browser edge` for Edge. The installer provisions the native host on the
 browser's OS, including Windows when invoked from WSL.
 
+Windows desktop, Windows Python and WSL installations share the same browser
+bridge. New installations use `%LOCALAPPDATA%\Saygo\browser-bridge`; WSL accesses
+that directory through its `/mnt/...` mapping. Setup and new default connections
+inspect the Windows native-host registration and both historical locations. If a
+bridge is already connected, they retain its directory, including the legacy
+`%USERPROFILE%\.saygo\browser-bridge`. Setup updates the launcher at that location
+without disconnecting the running host. Multiple live bridges or an unresponsive
+host are reported instead of choosing a different browser silently.
+
+Saved sessions keep their explicit bridge and page binding. After a historical
+split installation, create a new named session against the discovered shared
+bridge and explicitly select the intended live page; an expired binding is never
+silently redirected. `python -m saygo.integrations.browser_setup --extension-id
+ehomcchjfomfkcmbeinlcmpbaamdhfbo --resolve-only` reports the effective directory
+without installing or changing registration.
+
 Open a normal website, then open the Saygo Browser popup and click **Connect
 local bridge**. Restart the Agent client. All existing and newly opened website
 tabs become available; no per-tab sharing is required. Chrome may display its

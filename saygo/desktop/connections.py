@@ -1,6 +1,5 @@
 """Desktop onboarding using the shared connection service."""
 from argparse import Namespace
-import json
 import os
 from pathlib import Path
 import platform
@@ -29,16 +28,14 @@ def connect_computer():
 
 def browser_status():
     """A bounded live probe; saved session files alone are not connection evidence."""
-    config = ds.STATE_DIR.parent / 'browser-bridge.json'
-    if not config.exists():
-        return {'connected': False, 'message': '尚未连接 · 点击连接 Chrome 安装扩展'}
     try:
         from saygo.integrations.browser_bridge import Client
-        directory = json.loads(config.read_text(encoding='utf-8'))['directory']
+        from saygo.integrations.browser_location import default_directory
+        directory = str(default_directory(ds.STATE_DIR.parent))
         pages = Client(directory, timeout=3).call('pages')
         return {'connected': True, 'pages': pages, 'directory': directory}
     except (OSError, ValueError, KeyError, RuntimeError) as exc:
-        return {'connected': False, 'message': '等待扩展连接 · 在扩展中点击 Connect local bridge', 'detail': str(exc)}
+        return {'connected': False, 'message': '浏览器连接检查失败 · ' + str(exc), 'detail': str(exc)}
 
 
 def connect_browser(status):

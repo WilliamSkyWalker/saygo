@@ -41,6 +41,8 @@ class ConnectionTests(unittest.TestCase):
         with patch('saygo.integrations.browser_bridge.Client.call', side_effect=RuntimeError('offline')):
             result = connections.browser_status()
         self.assertFalse(result['connected'])
+        self.assertIn('offline', result['message'])
+        self.assertNotIn('Connect local bridge', result['message'])
 
     def test_install_registers_before_opening_chrome(self):
         events = []

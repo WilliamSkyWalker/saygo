@@ -39,3 +39,19 @@ jobs:
       - run: sudo apt-get install -y xvfb openbox x11-utils
       - name: Real extension, native host, background capture and scrolling
         run: xvfb-run -a -s "-screen 0 1600x1000x24" python scripts/check_browser_tests.py
+  bridge-windows:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install '.[mcp]'
+      - name: Native host IPC, shared installation discovery and Windows file sharing
+        run: |
+          python -m unittest discover -s tests/extension_demo -p test_bridge.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m unittest discover -s tests/extension_demo -p test_shared_bridge.py -v

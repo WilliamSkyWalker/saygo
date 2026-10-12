@@ -199,9 +199,9 @@ def connect(args):
         return {"connected": False, "session": args.session, **state["handoff"]}
     keys = session_keys(args.session, state)
     if args.platform == 'browser' and (args.backend or state.get('browser_backend')) == 'extension' and not args.bridge_directory:
-        default = ds.STATE_DIR.parent / 'browser-bridge.json'
-        if not state and default.is_file():
-            args.bridge_directory = json.loads(default.read_text())['directory']
+        if not state:
+            from saygo.integrations.browser_location import default_directory
+            args.bridge_directory = str(default_directory(ds.STATE_DIR.parent))
     if args.platform in {"desktop", "windows", "mac"}:
         keys.append("desktop:local")
     if getattr(args, "device", None):

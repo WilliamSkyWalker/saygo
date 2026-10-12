@@ -354,12 +354,15 @@ def synchronize_package_bridge(root, installed):
     try:
         with lock(root/'install.lock'):
             latest = read(root/'installation.json')
-            if latest.get('version') == installed['version']:
-                return
             command = [installed['python'], '-I', '-m', 'saygo.integrations.browser_setup',
                        '--extension-id', installed['extension_id'],
                        '--browser', installed.get('browser', 'chrome'),
                        '--directory', bridge['directory'], '--save-default']
+            resolved = json.loads(subprocess.check_output(command + ['--resolve-only'], text=True, timeout=30))
+            if (latest.get('version') == installed['version']
+                    and resolved['directory'] == bridge['directory']
+                    and resolved.get('registered_directory') == bridge['directory']):
+                return
             result = subprocess.check_output(command, text=True, timeout=120)
             latest.update(version=installed['version'], bridge=json.loads(result))
             write(root/'installation.json', latest)

@@ -18,6 +18,38 @@ from saygo.platforms import device_session as ds
 
 
 class BridgeTests(unittest.TestCase):
+    def test_windows_sharing_violation_retries_publication_without_rewriting_payload(self):
+        from saygo.integrations import browser_bridge as bridge
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)/'status.json'
+            error = PermissionError('reader denies delete sharing'); error.winerror = 5
+            replace = os.replace
+            sources = []
+            def publish(source, destination):
+                sources.append(source)
+                if len(sources) < 3:
+                    raise error
+                replace(source, destination)
+            with patch.object(bridge.os, 'replace', side_effect=publish), patch.object(bridge.time, 'sleep'):
+                atomic_json(target, {'connected':True, 'epoch':'unchanged'})
+            self.assertEqual(len(set(sources)), 1)
+            self.assertEqual(json.loads(target.read_text())['epoch'], 'unchanged')
+            self.assertFalse(list(Path(tmp).glob('*.tmp')))
+
+    def test_persistent_windows_sharing_failure_is_bounded_and_preserves_old_status(self):
+        from saygo.integrations import browser_bridge as bridge
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)/'status.json'
+            atomic_json(target, {'connected':True, 'epoch':'original'})
+            error = PermissionError('locked'); error.winerror = 32
+            with patch.object(bridge.os, 'replace', side_effect=error) as replace, \
+                 patch.object(bridge.time, 'monotonic', side_effect=[0, .5, 1.1]), patch.object(bridge.time, 'sleep'):
+                with self.assertRaises(PermissionError):
+                    atomic_json(target, {'connected':False})
+                self.assertEqual(replace.call_count, 2)
+            self.assertEqual(json.loads(target.read_text())['epoch'], 'original')
+            self.assertFalse(list(Path(tmp).glob('*.tmp')))
+
     def test_capture_diagnostics_forward_without_screenshot_or_input(self):
         p = ExtensionBrowserPlatform()
         evidence = {'window_state': 'minimized', 'connection_retained': True,

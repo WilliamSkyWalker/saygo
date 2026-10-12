@@ -3799,3 +3799,33 @@ Feature: Saygo 全项目需求自动化契约
     Given installation.json 版本陈旧且残留 active-runtime.json
     When 读取实际 package 版本
     Then 版本取自 pipx 解释器的包元数据，忽略 managed 指针
+
+  @UP-013 @UPDATE-019 @auto
+  Scenario: UP-013 test_same_package_version_still_repairs_a_changed_shared_directory
+    Given Python 包版本相同，但桌面版在线 bridge 与安装记录不同
+    When 同步 package bridge
+    Then 先发现共享目录再修复注册与安装记录，不因版本相同跳过
+
+  @UP-014 @UPDATE-019 @auto
+  Scenario: UP-014 test_matching_shared_directory_and_package_version_do_not_reinstall
+    Given 包版本、共享目录、实际注册与安装记录全部一致
+    When 同步 package bridge
+    Then 只执行只读发现，不重复安装 native host 或改写安装记录
+
+  @UP-015 @UPDATE-019 @auto
+  Scenario: UP-015 test_matching_version_and_live_directory_still_repair_stale_registration
+    Given 包版本与在线目录一致，但浏览器实际注册指向另一目录
+    When 同步 package bridge
+    Then 修复实际注册，避免下次插件连接进入另一套 bridge
+
+  @UP-016 @UPDATE-019 @auto
+  Scenario: UP-016 test_package_upgrade_updates_host_even_when_directory_is_unchanged
+    Given 外部升级 Python 包后共享 bridge 目录不变
+    When 同步 package bridge
+    Then 更新 host 安装及版本记录，不因目录相同漏掉升级
+
+  @UP-017 @UPDATE-019 @auto
+  Scenario: UP-017 test_discovery_failure_preserves_installation_and_reports_pending
+    Given 共享 bridge 发现失败或繁忙
+    When 同步 package bridge
+    Then 保留原安装记录并报告更新待完成，不擅自建立第二套 bridge

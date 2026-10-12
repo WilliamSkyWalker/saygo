@@ -76,13 +76,16 @@ class Handler(BaseHTTPRequestHandler):
 
 @unittest.skipUnless(os.environ.get("SAYGO_TEST_CHROME"),"set SAYGO_TEST_CHROME for real extension integration")
 class ExtensionLive(unittest.TestCase):
+    def test_mcp_restart_preserves_connection_and_selected_page(self):
+        self.run_live(lambda *args: None, reconnect_mcp=True)
+
     def test_native_host_existing_tab_visual_input_and_release(self):
         self.run_live(self.check_capture_and_scroll)
 
     def test_background_tab_input_after_manual_tab_switch(self):
         self.run_live(self.check_background_input)
 
-    def run_live(self, check):
+    def run_live(self, check, reconnect_mcp=False):
         from playwright.sync_api import sync_playwright
         from PIL import Image
         with tempfile.TemporaryDirectory() as tmp, sync_playwright() as pw:
@@ -180,6 +183,16 @@ class ExtensionLive(unittest.TestCase):
                 platform.press_key("select_all")
                 platform.input_text("reconnected")
                 self.assertEqual(page.locator("input").input_value(),"reconnected")
+                # A new MCP process must recover the persisted session while the
+                # same Chrome/native host stays alive, then perform real input.
+                if reconnect_mcp:
+                    probe = subprocess.run([sys.executable, str(Path(__file__).with_name('mcp_restart_probe.py')),
+                        str(root/'mcp-state'), str(root/'bridge'), pid],
+                        capture_output=True, text=True, timeout=75)
+                    self.assertEqual(probe.returncode, 0, probe.stdout + probe.stderr)
+                    self.assertEqual(json.loads(probe.stdout)['page_id'], pid)
+                    self.assertEqual(page.locator('input').input_value(), 'reconnected-mcp0-mcp1')
+                    self.assertTrue(send('status')['connected'])
                 with page.expect_popup() as popup_event:
                     platform.tap(50,80)
                 popup=popup_event.value

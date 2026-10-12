@@ -31,7 +31,17 @@ def atomic_json(path, value):
             if os.name != "nt":
                 os.chmod(temp, 0o600)
             json.dump(value, stream, ensure_ascii=False)
-        os.replace(temp, path)
+        # Windows readers briefly deny delete-sharing while reading status.
+        # Retry only publishing this same file, never dispatching an action.
+        deadline = time.monotonic() + 1
+        while True:
+            try:
+                os.replace(temp, path)
+                break
+            except PermissionError as exc:
+                if getattr(exc, 'winerror', None) not in {5, 32} or time.monotonic() >= deadline:
+                    raise
+                time.sleep(.01)
     finally:
         temp.unlink(missing_ok=True)
 
@@ -71,7 +81,9 @@ class Client:
         if status.get('protocol') != PROTOCOL:
             raise RuntimeError('Browser bridge protocol mismatch; update the local host and reload the extension')
         if not status.get("connected"):
-            raise RuntimeError(status.get('error') or "Connect the Saygo browser extension first")
+            raise RuntimeError(status.get('error') or
+                f"No browser connection at {self.directory}; check the shared bridge location, "
+                "then explicitly connect the intended session/page")
         rid = uuid.uuid4().hex
         request = self.directory / (rid + ".request")
         response = self.directory / (rid + ".response")

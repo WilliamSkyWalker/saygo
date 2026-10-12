@@ -5,7 +5,28 @@ Offline checks:
 ```sh
 node --test tests/extension_demo/test_*.mjs
 python3 -m unittest discover -s tests/extension_demo -p test_bridge.py -v
+python3 -m unittest discover -s tests/extension_demo -p test_shared_bridge.py -v
 ```
+
+Shared-bridge regression tests reproduce the desktop/WSL split installation,
+both installation orders, stale defaults/registration, multiple live hosts,
+identity migration, and preservation of explicit page bindings. They run real
+native-host subprocesses and file IPC with a synthetic framed extension peer;
+Windows directory/registry layout is injected. They do not replace real Chrome
+acceptance.
+
+The same native-host tests run on Windows in CI. Concurrent status readers on
+Windows can cause `os.replace` to fail with WinError 5 or 32. Status publication
+retries the same temporary file for at most one second; it never replays a browser
+action. Regression tests cover successful retry and bounded failure with the
+previous status preserved.
+
+The live suite also runs `test_mcp_restart_preserves_connection_and_selected_page`:
+a real Chrome extension and native host remain connected while two independent
+MCP stdio servers start and exit. Each discovers the saved page, returns a
+decodable PNG, clicks the test input and inserts text. The browser fixture checks
+the final text and the same selected page; the existing headed CI gate runs this
+case along with the background capture/scroll cases.
 
 `test_capture.mjs` uses mocked window states (including minimized) to ensure
 requests never activate tabs or change focus. These are control-policy checks,
