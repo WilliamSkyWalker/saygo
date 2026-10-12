@@ -48,7 +48,7 @@ Saygo 为外部编程 Agent 提供跨手机、浏览器和桌面窗口的视觉�
 - `scripts/build_desktop.py` 生成原生目录包；`scripts/package_desktop.py` 在目标 OS 生成 Windows ZIP / macOS DMG / Linux tar.gz 与校验和。`.github/workflows/desktop.yml` 手动构建，不自动发布。
 - Windows x64 已通过 7 项 desktop 测试、打包 EXE 的 Qt 启动和 native-host 握手；Linux GUI 启动/打包已检查。macOS 脚本未实机验证；签名、公证、干净机器和完整模型业务任务仍待验收。不得将这些检查混称为全平台实测。
 
-使用和验证边界见 [desktop](docs/desktop.md)、[distribution](distribution/README.md)。
+使用和验证边界见 [desktop](docs/desktop.md)、[distribution](docs/distribution/README.md)。
 
 ## QA 架构（数据流）
 

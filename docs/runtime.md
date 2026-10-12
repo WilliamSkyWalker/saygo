@@ -27,9 +27,9 @@ JSON workflow → 校验 → Runtime → 资源适配器
 
 ## 启动
 
-所有命令都从仓库根目录运行。默认状态保存在 `.saygo_runs/runtime/`（已被 Git 忽略）。
+安装后可从任意工作目录运行命令。默认任务状态保存在 `$SAYGO_HOME_DIR/runtime`（通常为 `~/.saygo/runtime`）。
 也可以设置 `SAYGO_RUNTIME_DIR` 或使用 `workflow --state-dir /absolute/path ...`。
-**同一组资源必须使用同一个状态目录**，资源锁只在这个目录内协调。
+**同一组资源必须使用相同的 SAYGO_HOME_DIR 与任务库配置**。共享会话和全局操作锁使用 SAYGO_HOME_DIR，任务库使用 SAYGO_RUNTIME_DIR 或显式 state-dir。
 
 移动端与浏览器需要先创建命名会话：
 
@@ -100,8 +100,8 @@ browser 资源默认使用 Playwright/CDP，可显式配置 `"backend": "seleniu
 具体平台仍可能不支持某类动作；派发后异常进入 `needs_review`，不会自动重试。
 
 每个 action 必须引用同资源最近 30 秒内、尚未消费的 observation。派发前再次截图，
-尺寸与图像摘要须一致。当前是保守的精确图像比对：时钟、动画、光标闪烁也可能导致拒绝；
-后续将加入目标重定位与稳定区域校验。拒绝时需要重新观察、重新规划，不能盲目沿用旧坐标。
+目标身份和尺寸须一致。共享动作层比较解码后的像素变化，允许极少量远离目标的变化；
+点击附近区域另行比较，局部变化也会拒绝。该阈值是启发式保护，不是业务目标未变的证明。拒绝时需要重新观察、重新规划，不能盲目沿用旧坐标。
 动作结果 `dispatched` 只表示驱动调用返回，不代表业务目标达成；应安排独立 `check`。
 
 SQLite 每个 operation 对应资源规格里的已注册 SQL，参数使用 `arguments` 绑定。

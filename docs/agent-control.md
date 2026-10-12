@@ -12,7 +12,7 @@ saygo setup --client codex
 # Or: saygo setup --client claude / both / qoder / qodercn / all
 ```
 
-No repository clone or manual MCP configuration is needed. `saygo setup` uses the installer, Skill and browser extension bundled with the installed package, reuses the installed package environment, and registers your client integration. Follow its instructions to load the Chrome/Edge extension, click **Connect local bridge**, then restart the AI client. See [plugin installation](../plugins/saygo-device/README.md) for platform prerequisites.
+No repository clone or manual MCP configuration is needed. `saygo setup` uses the installer, Skill and browser extension bundled with the installed package, reuses the installed package environment, and registers your client integration. Follow its instructions to load the Chrome/Edge extension, click **Connect local bridge**, then restart the AI client. See [plugin installation](plugin.md) for platform prerequisites.
 
 To upgrade, run `pipx upgrade saygo-agent-control`, then restart the Agent client. MCP follows the same package environment; older copied-runtime installations need one setup migration using a release containing this fix. Use `saygo setup --help` for mobile dependencies, browser choice, update and uninstall options.
 

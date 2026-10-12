@@ -11,6 +11,8 @@ SUITES = ('control_demo', 'runtime_demo', 'desktop_demo', 'cli_demo',
 
 def main():
     root = Path(__file__).resolve().parents[1]
+    subprocess.run([sys.executable, 'scripts/render_requirement_cases.py', '--check'],
+                   cwd=root, check=True)
     with tempfile.TemporaryDirectory(prefix='saygo-core-checks-') as temporary:
         env = {k: v for k, v in os.environ.items() if not k.startswith('SAYGO_TEST_')}
         env['QT_QPA_PLATFORM'] = 'offscreen'

@@ -35,7 +35,7 @@ That route alone does not provision Python dependencies. Prefer the managed inst
 
 ## Operate
 
-Use the bundled [device skill](skills/device/SKILL.md) for the common protocol. Start by explicitly connecting a named session and querying its capabilities. Observe the image, decide one action, and inspect its result. Saygo handles percent/image/crop coordinate conversion; a dispatched action is not a verified business result.
+Use the bundled [device skill](../plugins/saygo-device/skills/device/SKILL.md) for the common protocol. Start by explicitly connecting a named session and querying its capabilities. Observe the image, decide one action, and inspect its result. Saygo handles percent/image/crop coordinate conversion; a dispatched action is not a verified business result.
 
 MCP exposes `device_sessions`, `device_connect`, `device_observe`, `device_act`, `device_command`, `device_handoff`, `device_resume`, and `agent_task`. Compatible `device_screenshot`, `device_tap`, `device_swipe`, `device_input`, `device_type_send`, `device_key` and `device_launch` names remain available. Their `serial` argument refers to a saved session across all platforms.
 

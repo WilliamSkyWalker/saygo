@@ -21,8 +21,11 @@ import urllib.request
 
 REPOSITORY = 'WilliamSkyWalker/saygo'
 API = 'https://api.github.com/repos/' + REPOSITORY + '/releases?per_page=100'
+PACKAGE_API = 'https://pypi.org/pypi/saygo-agent-control/json'
 DOWNLOAD = 'https://github.com/' + REPOSITORY + '/releases/download/'
 INTERVAL = 86400
+_CHECK_THREADS = {}
+_CHECK_THREADS_LOCK = threading.Lock()
 
 
 def read(path, default=None):
@@ -87,46 +90,129 @@ def current(root):
     return installed
 
 
+def update_data(path):
+    """Disposable update metadata must never prevent using a working device."""
+    try:
+        value = read(path)
+        return value if isinstance(value, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def fresh(state, installed):
+    checked = state.get('checked_at')
+    return (isinstance(checked, (int, float)) and not isinstance(checked, bool)
+            and 0 <= time.time() - checked < INTERVAL
+            and state.get('current') == installed.get('version'))
+
+
 def check(root, force=False):
     root = Path(root)
-    config = read(root/'updates.json', {'automatic': False, 'channel': 'stable'})
-    state = read(root/'update-state.json')
-    if not force and time.time() - state.get('checked_at', 0) < INTERVAL:
-        return state
+    with lock(root/'check.lock', blocking=True):
+        return _check(root, force)
+
+
+def _check(root, force):
+    config = update_data(root/'updates.json')
+    state = update_data(root/'update-state.json')
     installed = current(root)
+    if not force and fresh(state, installed):
+        return state
+    package = installed.get('runtime_mode') == 'package'
+    channel = 'stable' if package else config.get('channel', 'stable')
     try:
-        releases = json.loads(fetch(API))
+        if package:
+            # pipx upgrades from the package index, not from GitHub release assets.
+            published = json.loads(fetch(PACKAGE_API))['releases']
+            releases = [{'tag_name': 'v'+number} for number, files in published.items()
+                        if re.fullmatch(r'\d+\.\d+\.\d+', number)
+                        and any(not entry.get('yanked', False) for entry in files)]
+        else:
+            releases = json.loads(fetch(API))
         candidates = []
         for release in releases:
             tag = release.get('tag_name', '')
-            if release.get('draft') or (release.get('prerelease') and config.get('channel', 'stable') != 'beta'):
+            if release.get('draft') or (release.get('prerelease') and channel != 'beta'):
                 continue
             if re.fullmatch(r'v\d+\.\d+\.\d+', tag) and version(tag) > version(installed['version']):
                 candidates.append(release)
         latest = max(candidates, key=lambda item: version(item['tag_name'])) if candidates else None
-        state = {'checked_at': time.time(), 'current': installed['version'], 'channel': config.get('channel', 'stable'),
+        state = {'checked_at': time.time(), 'current': installed['version'], 'channel': channel,
                  'available': bool(latest), 'release': latest, 'error': None}
     except Exception as exc:
-        state = {**state, 'checked_at': time.time(), 'error': 'Update check failed: ' + str(exc)}
+        state = {**state, 'current': installed['version'], 'checked_at': time.time(),
+                 'error': 'Update check failed: ' + str(exc)}
     write(root/'update-state.json', state)
     return state
 
 
-def notice(root):
-    installed = current(Path(root))
-    if installed.get('runtime_mode') == 'package':
-        return {'current': installed['version'], 'runtime_mode': 'package',
-                'automatic': False, 'channel': 'stable',
-                'message': 'MCP follows the installed package. Upgrade with pipx; restart the Agent client to load it.'}
-    state = read(Path(root)/'update-state.json')
-    config = read(Path(root)/'updates.json')
-    result = {'current': current(Path(root)).get('version'), 'automatic': config.get('automatic', False), 'channel': config.get('channel', 'stable')}
-    if state.get('available'):
-        tag = state['release']['tag_name']
-        result.update(available=tag, url='https://github.com/'+REPOSITORY+'/releases/tag/'+tag,
-                      message='Saygo '+tag+' is available. Run saygo update --apply, or enable saygo update --auto on.')
+def _background_check(root, force):
+    try:
+        check(root, force=force)
+        info = notice(root, refresh=False)
+        if info.get('available') or info.get('error'):
+            print('[Saygo update] '+json.dumps(info), file=sys.stderr)
+    except Exception as exc:
+        # A read-only filesystem, broken cache, or index outage is not an MCP failure.
+        print('[Saygo update] Update check failed: '+str(exc), file=sys.stderr)
+    finally:
+        with _CHECK_THREADS_LOCK:
+            _CHECK_THREADS.pop(str(root), None)
+
+
+def start_check(root, force=False):
+    """Coalesce tool calls in this process; check.lock serializes cache writers."""
+    root = Path(root).resolve()
+    key = str(root)
+    with _CHECK_THREADS_LOCK:
+        if key not in _CHECK_THREADS:
+            worker = threading.Thread(target=_background_check, args=(root, force),
+                                      daemon=True, name='saygo-update-check')
+            _CHECK_THREADS[key] = worker
+            try:
+                worker.start()
+            except Exception:
+                _CHECK_THREADS.pop(key, None)
+                raise
+    return True
+
+
+def notice(root, refresh=True):
+    root = Path(root)
+    try:
+        installed = current(root)
+    except Exception as exc:
+        return {'automatic': False, 'error': 'Cannot read installed version: '+str(exc)}
+    package = installed.get('runtime_mode') == 'package'
+    state = update_data(root/'update-state.json')
+    config = update_data(root/'updates.json')
+    result = {'current': installed.get('version'),
+              'automatic': False if package else config.get('automatic', False),
+              'channel': 'stable' if package else config.get('channel', 'stable')}
+    if package:
+        result.update(runtime_mode='package',
+                      message='Upgrade with pipx upgrade saygo-agent-control; restart the Agent client to load it.')
+    if state.get('checked_at'):
+        result['checked_at'] = state['checked_at']
+    release = state.get('release')
+    tag = release.get('tag_name', '') if isinstance(release, dict) else ''
+    try:
+        available = state.get('available') and version(tag) > version(installed['version'])
+    except (TypeError, ValueError, KeyError):
+        available = False
+    if available:
+        result.update(available=tag,
+                      url=('https://pypi.org/project/saygo-agent-control/'+tag.removeprefix('v')+'/'
+                           if package else 'https://github.com/'+REPOSITORY+'/releases/tag/'+tag),
+                      message=('Saygo '+tag+' is available. Run pipx upgrade saygo-agent-control; restart the Agent client to load it.'
+                               if package else 'Saygo '+tag+' is available. Run saygo update --apply, or enable saygo update --auto on.'))
     if state.get('error'): result['error'] = state['error']
-    if state.get('deferred'): result['deferred'] = state['deferred']
+    if state.get('deferred') and not package: result['deferred'] = state['deferred']
+    if refresh and not fresh(state, installed):
+        try:
+            result['checking'] = start_check(root)
+        except Exception as exc:
+            result['error'] = 'Cannot start update check: '+str(exc)
     return result
 
 
@@ -194,6 +280,8 @@ def activate(root, selected):
 
 def apply(root, state, stage_only=False):
     root = Path(root)
+    if read(root/'installation.json').get('runtime_mode') == 'package':
+        raise ValueError('This installation follows pipx. Run pipx upgrade saygo-agent-control.')
     if not state.get('available') or state.get('error'): return state
     if not stage_only and busy(root):
         state['deferred'] = 'Close other Agent sessions and finish or cancel unfinished tasks before updating.'
@@ -287,6 +375,10 @@ def serve(root, args):
         # No source-checkout discovery and no managed-runtime pointer fallback.
         # The same venv that pipx upgrades is used at every client startup.
         installed = current(root)
+        try:
+            start_check(root, force=True)
+        except Exception as exc:
+            print('[Saygo update] Cannot start update check: '+str(exc), file=sys.stderr)
         # WSL/Windows provisioning must not consume the MCP startup deadline.
         threading.Thread(target=synchronize_package_bridge, args=(root, installed),
                          daemon=True, name='saygo-package-bridge').start()
@@ -314,7 +406,7 @@ def serve(root, args):
             except Exception as exc:
                 state = read(root/'update-state.json'); state['error'] = str(exc)
                 write(root/'update-state.json', state)
-            info = notice(root)
+            info = notice(root, refresh=False)
             if info.get('available') or info.get('error'):
                 print('[Saygo update] '+json.dumps(info), file=sys.stderr)
             stack.enter_context(lock(marker))
@@ -347,11 +439,16 @@ def main(argv=None):
     if installed.get('runtime_mode') == 'package':
         if rest:
             parser.error('Unknown arguments: ' + ' '.join(rest))
-        if args.apply or args.auto or args.channel:
+        if args.apply or args.auto == 'on' or args.channel:
             parser.error('This installation follows pipx. Run pipx upgrade saygo-agent-control, '
                          'then restart the Agent client; setup is not required again.')
-        print(json.dumps({'current': current(root)['version'], 'runtime_mode': 'package',
-                          'message': 'Updates follow pipx upgrade saygo-agent-control.'}))
+        if args.auto == 'off':
+            config = update_data(root/'updates.json')
+            config['automatic'] = False
+            write(root/'updates.json', config)
+        check(root, force=True)
+        if not args.background:
+            print(json.dumps(notice(root, refresh=False), ensure_ascii=False))
         return 0
     if rest: parser.error('Unknown arguments: '+' '.join(rest))
     if args.background:
@@ -374,7 +471,7 @@ def main(argv=None):
         if args.check or args.apply or (args.auto is None and not args.channel):
             state = check(root, force=True)
             if args.apply: apply(root, state)
-        print(json.dumps(notice(root), ensure_ascii=False))
+        print(json.dumps(notice(root, refresh=False), ensure_ascii=False))
     return 0
 
 

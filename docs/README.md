@@ -1,12 +1,15 @@
 # Saygo
 
+[完整文档索引](index.md) · [全项目需求](requirements.md) · [BDD 测试与验收](testing/README.md)
+
+
 **你说，它做。**
 
 让 AI 操作你的电脑、浏览器和手机。Saygo connects programming agents to real devices through visual observation, actions, and verified results.
 
 **官网：[saygo.work](https://saygo.work/)** · [Source repository](https://github.com/WilliamSkyWalker/saygo)
 
-[MIT License](LICENSE) · [中文说明](#中文说明) · [Agent development guide](agent.md)
+[MIT License](../LICENSE) · [中文说明](#中文说明) · [Agent development guide](../agent.md)
 
 **Visual control of phones, browser pages and desktop windows, with persistent sessions and task records.**
 
@@ -29,7 +32,7 @@ See [platforms and validation limits](#platforms-and-validation-limits) for the 
 | Desktop application user | Saygo Desktop (Qt 6 / PySide6) | Configure an OpenAI-compatible vision API URL, model and API key in the app |
 | Script or CI user | `saygo device`, `saygo task`, `saygo workflow`, `saygo run` | Direct control needs no key; the built-in QA loop needs model credentials |
 
-Saygo is currently a **development/beta distribution**. Installable source bundles and native packaging scripts exist; the Python package is available on PyPI; the browser extension is not yet published on the Chrome Web Store. See the [distribution guide](distribution/README.md) for release artifacts, updates and uninstall.
+Saygo is currently a **development/beta distribution**. Installable source bundles and native packaging scripts exist; the Python package is available on PyPI; browser extension publication and review status must be checked separately from package publication. See the [distribution guide](distribution/README.md) for release artifacts, updates and uninstall.
 
 ## Programming Agent setup
 
@@ -92,7 +95,7 @@ After downloading, rerun `install-saygo.py` with `--client claude`, `codex`, `qo
 
 From a checkout, developers can use `python3 scripts/install_development.py`. Check [GitHub Releases](https://github.com/WilliamSkyWalker/saygo/releases) for published assets. The `saygo-0.4.3.zip` name below is the new build output, not a claim that this asset is already published.
 
-Managed installations check for updates in the background and report new releases. Automatic runtime updates are opt-in: add `--auto-update --update-channel beta` when running the installer. Prepared updates activate on a later idle Agent startup; browser/Skill changes prompt a full upgrade. See [update controls and limits](distribution/README.md#update-and-uninstall).
+Package and managed installations check for updates in the background and report new releases. Package checks report public PyPI versions and direct users to pipx; see the source-repair and rollout boundary in the distribution guide. Automatic runtime updates are opt-in: add `--auto-update --update-channel beta` when running the installer. Prepared updates activate on a later idle Agent startup; browser/Skill changes prompt a full upgrade. See [update controls and limits](distribution/README.md#update-and-uninstall).
 
 For browser control, install [Saygo Browser from the Chrome Web Store](https://chromewebstore.google.com/detail/ehomcchjfomfkcmbeinlcmpbaamdhfbo) (Chrome or Edge). The store extension ID is `ehomcchjfomfkcmbeinlcmpbaamdhfbo`. Open its popup and click **Connect local bridge**. Store installations receive approved updates automatically. Restart the Agent client and describe a task, for example:
 
@@ -110,7 +113,7 @@ saygo --help
 saygo-mcp --profile device
 ```
 
-Install only the needed extras: `mobile`, `windows`, `mac`, `desktop`, `browser` (CLI Playwright), `selenium`, or `qa`. A browser-extension-only MCP setup does not need the mobile toolchain. See the [operation guide](docs/agent-control.md) and [plugin guide](plugins/saygo-device/README.md).
+Install only the needed extras: `mobile`, `windows`, `mac`, `desktop`, `browser` (CLI Playwright), `selenium`, or `qa`. A browser-extension-only MCP setup does not need the mobile toolchain. See the [operation guide](agent-control.md) and [plugin guide](plugin.md).
 
 ## Desktop application
 
@@ -139,7 +142,7 @@ python3 scripts/build_desktop.py
 python3 scripts/package_desktop.py
 ```
 
-Output: Windows ZIP, macOS DMG or Linux tar.gz under `dist/installers`, each with a SHA256 checksum. The manual [desktop workflow](.github/workflows/desktop.yml) builds CI artifacts. These are development builds without release signing or notarization. See [desktop usage and validation](docs/desktop.md).
+Output: Windows ZIP, macOS DMG or Linux tar.gz under `dist/installers`, each with a SHA256 checksum. The manual [desktop workflow](../.github/workflows/desktop.yml) builds CI artifacts. These are development builds without release signing or notarization. See [desktop usage and validation](desktop.md).
 
 ## Observe, act, verify
 
@@ -168,7 +171,7 @@ saygo device wait --session mail --mode stable --timeout 5
 
 Observations include identity, target, dimensions and coordinate mappings. Crop observations retain the mapping to the original screen. MCP `device_observe` and action results with observations return image content; CLI returns image paths and metadata. Query capabilities before using platform-dependent actions.
 
-**Dispatched input or a stable frame does not establish business success.** Inspect the resulting screen. Prefer visible buttons and menus over keyboard shortcuts. Unsupported actions fail explicitly; Windows background mode must not silently fall back to global keyboard/mouse input. See [control details](docs/control.md).
+**Dispatched input or a stable frame does not establish business success.** Inspect the resulting screen. Prefer visible buttons and menus over keyboard shortcuts. Unsupported actions fail explicitly; Windows background mode must not silently fall back to global keyboard/mouse input. See [control details](control.md).
 
 ## Tasks, handoff and recovery
 
@@ -192,7 +195,7 @@ Use the IDs returned by create/observe. MCP exposes the same task commands throu
 
 Runtime records dispatch intent before input, deduplicates request IDs, and marks interrupted actions with unknown results as `needs_review`; it never blindly replays them. Handoff blocks automatic input, and resume obtains fresh observations. Tasks retain resource ownership until finished or cancelled; use the owning task interface while a session is bound. Local desktop windows share an input lock.
 
-Execution facts, errors, before/after captures and Agent notes are recorded separately. Evidence exports can contain application content and entered text. See [interactive task semantics](docs/agent-control.md), [workflow format](docs/runtime.md) and [workflow examples](examples/workflows).
+Execution facts, errors, before/after captures and Agent notes are recorded separately. Evidence exports can contain application content and entered text. See [interactive task semantics](agent-control.md), [workflow format](runtime.md) and [workflow examples](../examples/workflows).
 
 ## Platforms and validation limits
 
@@ -203,10 +206,10 @@ Execution facts, errors, before/after captures and Agent notes are recorded sepa
 | Chrome / Edge | Extension + native messaging for MCP and the desktop GUI; store installation and fresh-machine setup still require acceptance tests. |
 | Managed test browser | Playwright/CDP through CLI/Runtime; Selenium remains available for QA. Playwright is rejected by MCP. |
 | Windows desktop | Native driver or PowerShell/Win32 runner; WSL is optional. Experimental background control depends on application controls and rejects unsupported shortcuts. |
-| macOS desktop | Foreground control plus explicit experimental `--background` mode using native control actions and directed Unicode keys. Background button/input/scroll tests passed on an isolated macOS 12.7.6 panel; see [limits](docs/control.md#macos-background-mode). Native packaging and full application tasks remain unverified. |
+| macOS desktop | Foreground control plus explicit experimental `--background` mode using native control actions and directed Unicode keys. Background button/input/scroll tests passed on an isolated macOS 12.7.6 panel; see [limits](control.md#macos-background-mode). Native packaging and full application tasks remain unverified. |
 | Remote desktop | Experimental RDP prototype; not a stable supported deployment path. |
 
-Windows native desktop tests, frozen EXE startup and native-host handshake passed. Linux Qt startup and packaging passed. These checks do **not** establish clean-machine installation, a live model-driven task or the full phone registration → email activation → desktop confirmation acceptance scenario. Detailed evidence boundaries: [desktop](docs/desktop.md), [Agent control](docs/agent-control.md), [mobile](docs/mobile.md), [distribution](distribution/README.md).
+Windows native desktop tests, frozen EXE startup and native-host handshake passed. Linux Qt startup and packaging passed. These checks do **not** establish clean-machine installation, a live model-driven task or the full phone registration → email activation → desktop confirmation acceptance scenario. Detailed evidence boundaries: [desktop](desktop.md), [Agent control](agent-control.md), [mobile](mobile.md), [distribution](distribution/README.md).
 
 `doctor` checks connection, capture and image readability. Input remains untested unless an explicit `--probe-action` is supplied on a harmless target; its result still needs visual inspection.
 
@@ -243,9 +246,9 @@ Feature: Login
     Then the email and password fields are visible
 ```
 
-QA verdicts are model judgements with recorded evidence, not independent proof. Use [probe plugins](docs/probes.md) for non-visual facts such as backend writes. Figma test generation and visual review remain available through `saygo figma`. The existing [`/saygo-drive` Skill](.claude/skills/saygo-drive/SKILL.md) provides a separate QA-oriented Agent workflow; general cross-device tasks should use the shared operation Skill and Runtime records.
+QA verdicts are model judgements with recorded evidence, not independent proof. Use [probe plugins](probes.md) for non-visual facts such as backend writes. Figma test generation and visual review remain available through `saygo figma`. The existing [`/saygo-drive` Skill](../.claude/skills/saygo-drive/SKILL.md) provides a separate QA-oriented Agent workflow; general cross-device tasks should use the shared operation Skill and Runtime records.
 
-For QA execution guards, model configuration, case conventions and module responsibilities, see [agent.md](agent.md), [`.env.example`](.env.example) and [architecture](docs/architecture.md).
+For QA execution guards, model configuration, case conventions and module responsibilities, see [agent.md](../agent.md), [`.env.example`](../.env.example) and [architecture](architecture.md).
 
 ## 中文说明
 
@@ -268,10 +271,10 @@ Saygo 为外部编程 Agent 提供手机、浏览器和桌面窗口的视觉操�
 - **恢复与接管**：CLI/MCP 共用命名会话；`saygo task` 保存操作记录、支持人工接管和中断恢复。结果不确定的动作需核对，不自动重放。点击派发成功或画面稳定都不等于业务完成。
 - **测试边界**：Windows EXE 已通过启动和桥接握手验证，完整跨端业务验收与干净机器安装仍需实测；不要将模拟测试当作真机兼容性证明。
 
-安装与更新见[分发说明](distribution/README.md)，窗口版见[桌面指南](docs/desktop.md)，会话、操作和恢复见[Agent 操作指南](docs/agent-control.md)，开发约束见[通用 agent.md](agent.md)。
+安装与更新见[分发说明](distribution/README.md)，窗口版见[桌面指南](desktop.md)，会话、操作和恢复见[Agent 操作指南](agent-control.md)，开发约束见[通用 agent.md](../agent.md)。
 
 ## License
 
-Saygo is licensed under [MIT](LICENSE). Third-party dependencies retain their respective licenses.
+Saygo is licensed under [MIT](../LICENSE). Third-party dependencies retain their respective licenses.
 
 Saygo 采用 MIT 许可证；第三方依赖遵循各自许可证。

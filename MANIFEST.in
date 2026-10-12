@@ -1,4 +1,4 @@
-include LICENSE README.md pyproject.toml setup.py MANIFEST.in
+include LICENSE agent.md docs/README.md pyproject.toml setup.py MANIFEST.in
 include scripts/install_agent_plugin.py scripts/install_saygo.py scripts/build_release.py
 include scripts/build_desktop.py scripts/package_desktop.py scripts/desktop_windows.spec
 recursive-include saygo *.py *.ps1 *.cjs *.md *.json *.txt
@@ -7,8 +7,8 @@ include plugins/saygo-device/.mcp.json
 include plugins/saygo-device/.codex-plugin/plugin.json
 include plugins/saygo-device/.claude-plugin/plugin.json
 recursive-include extensions/saygo-browser *.json *.js *.html *.png LICENSE
-recursive-include distribution *.md *.json
-include docs/desktop.md
+recursive-include distribution *.json
+recursive-include docs *.md *.feature
 prune tests
 prune website-project
 prune build

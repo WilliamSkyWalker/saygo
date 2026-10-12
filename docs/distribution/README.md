@@ -274,3 +274,35 @@ Other directories keep the user plugin and the installed release package.
 The normal user command is simply `saygo setup --client codex`; custom extension IDs are explicit overrides.
 
 Codex project plugin scoping follows [the official project configuration documentation](https://developers.openai.com/plugins/build/plugins).
+
+## Package update checks
+
+Version checking, notification and applying an upgrade are separate. In package
+mode Saygo checks the public PyPI release index for a newer stable version with
+non-yanked files. It reports the version, package link and
+`pipx upgrade saygo-agent-control` command even when `automatic` is false.
+Saygo does not apply package upgrades or switch managed runtime pointers.
+The package checker uses public PyPI; custom/private pip indexes are not queried.
+
+Each new package MCP startup schedules a background check. `device_sessions`
+also schedules one when the cache is absent, invalid, expired (24 hours), or
+belongs to another installed version. The first response may contain
+`checking: true`; a later call returns the completed result. Checks never write
+to MCP stdout, and network errors are reported without preventing device use.
+Concurrent calls share a worker in the process and serialize cache writes.
+An index failure can retain a previous known newer release alongside `error`;
+`checked_at` is the last attempt, not proof of a successful lookup.
+
+`saygo update --check` or `saygo update` forces a check in package mode.
+`--auto off` keeps notification-only behavior. `--apply`, `--auto on` and
+managed channel selection are rejected with pipx instructions. After upgrading,
+restart the Agent client. Completed cached reminders are compared with the
+actual installed package version, so already installed releases are not offered.
+Standalone managed installers retain GitHub release selection and verified
+opt-in runtime preparation/activation.
+
+This is the source-tree behavior after the update-check repair. An existing
+0.4.12 installation does not acquire it merely because this checkout changed.
+Install a package containing the repair and restart the client; an old package
+launcher can then rely on the new MCP module's notification refresh. No version
+bump or publication is implied by this documentation.
