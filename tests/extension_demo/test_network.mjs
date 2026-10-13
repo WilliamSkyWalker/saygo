@@ -57,6 +57,13 @@ test('retention, capture identity and stop discard late bodies', async () => {
   assert.equal(j.read(1).retained,1200);
   assert.equal(j.read(1).dropped,0);
   assert.equal(j.tabs.get(1).requests.size,1200);
+  const ids=[];
+  let after=0;
+  while(ids.length<1200) {
+    const page=j.read(1,{after,limit:200});
+    ids.push(...page.events.map(e=>e.request_id)); after=page.next_cursor;
+  }
+  assert.deepEqual(ids,Array.from({length:1200},(_,i)=>String(i)));
   const id=j.read(1).capture_id; j.clear(1);
   assert.notEqual(j.read(1).capture_id,id);
   assert.equal(j.read(1).events.length,0);
@@ -186,4 +193,42 @@ test('clear discards in-flight stream state and late body results', async () => 
   resolve({bufferedData:'bGF0ZQ=='}); await starting;
   await j.event(1,'Network.loadingFinished',{requestId:'1',timestamp:2});
   assert.equal(j.read(1).events.length,0);
+});
+
+test('unsupported streaming preserves the cache fallback and reports both failures', async () => {
+  let evicted=false;
+  const j=new NetworkJournal(async(_tab,method)=>{
+    if(method==='Network.streamResourceContent') throw new Error('method not found');
+    if(evicted) throw new Error('evicted');
+    return {body:'full cache body',base64Encoded:false};
+  }); j.begin(1);
+  for(const id of ['1','2']) {
+    await j.event(1,'Network.requestWillBeSent',request(id));
+    await j.event(1,'Network.responseReceived',{requestId:id,type:'Fetch',response:{mimeType:'application/json'}});
+    await j.event(1,'Network.loadingFinished',{requestId:id,timestamp:2});
+    const row=j.read(1).events.at(-1);
+    if(!evicted) assert.equal(row.body,'full cache body');
+    else {
+      assert.equal(row.unavailable,'evicted');
+      assert.equal(row.stream_error,'method not found');
+      assert.equal(row.body,undefined);
+    }
+    evicted=true;
+  }
+});
+
+test('clear isolates old pending-body counters and cannot mix their results', async () => {
+  const resolves=[];
+  const j=new NetworkJournal(()=>new Promise(r=>resolves.push(r))); j.begin(1);
+  await j.event(1,'Network.requestWillBeSent',request('old'));
+  const old=j.event(1,'Network.loadingFinished',{requestId:'old',timestamp:2});
+  j.clear(1);
+  assert.equal(j.read(1).pending_bodies,0);
+  await j.event(1,'Network.requestWillBeSent',request('new'));
+  const fresh=j.event(1,'Network.loadingFinished',{requestId:'new',timestamp:2});
+  resolves[0]({body:'old'}); await old;
+  assert.equal(j.read(1).pending_bodies,1);
+  resolves[1]({body:'new'}); await fresh;
+  assert.equal(j.read(1).pending_bodies,0);
+  assert.deepEqual(j.read(1).events.filter(e=>e.kind==='http.body').map(e=>e.body),['new']);
 });

@@ -16,7 +16,7 @@ export class NetworkJournal {
   }
   clear(tabId) {
     const c = this.tabs.get(tabId);
-    if (c) { c.events = []; c.requests.clear(); c.id = crypto.randomUUID(); }
+    if (c) { c.events = []; c.requests.clear(); c.pending = 0; c.id = crypto.randomUUID(); }
   }
   reset() { this.tabs.clear(); }
   append(c, event) {
@@ -132,7 +132,7 @@ export class NetworkJournal {
           emit('http.body', {unavailable:String(error.message || error),
             stream_error:stream?.error || (stream ? 'Incomplete response stream' : 'Response streaming not started')});
         }
-      } finally { c.pending--; }
+      } finally { if (c.id === captureId) c.pending--; }
     } else if (method === 'Network.eventSourceMessageReceived') {
       emit('sse.message', {event_name:p.eventName, event_id:p.eventId, data:p.data});
     } else if (method === 'Network.webSocketWillSendHandshakeRequest') {

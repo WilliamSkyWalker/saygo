@@ -205,3 +205,36 @@ The native-host integration regression now takes three consecutive inactive-tab
 screenshots before each input. Deterministic capture tests also cover scoped
 rendering, owned frame acknowledgement, cleanup on error/timeout/detach, and
 late stream initialization. These mocked tests do not prove renderer liveness.
+
+### Full network bodies (2026-10-13)
+
+Linux Chrome for Testing 153.0.8010.12 passed
+`test_large_network_body_through_extension_native_host_and_cli` in an isolated
+headless profile against a local fixture. A 33 MiB JSON payload with a Unicode
+tail exceeded Chrome's response cache; the extension recovered it from captured
+stream bytes and returned it through the real native host and CLI. Decoded length,
+SHA-256, the final JSON field, `source: stream`, and zero truncation/drops were
+verified. The shared live setup also checked HTTP, WebSocket, SSE, visual input,
+PNG capture, session reconnect, page selection and release. This was one live
+test, not Windows/macOS, store-build, or existing-profile acceptance.
+
+```sh
+SAYGO_TEST_CHROME=/path/to/chrome python -m unittest tests.extension_demo.test_live.ExtensionLive.test_large_network_body_through_extension_native_host_and_cli -v
+python -m unittest tests.extension_demo.test_bridge tests.extension_demo.test_shared_bridge tests.control_demo.test_network -v
+for test_file in tests/extension_demo/test_*.mjs; do node "$test_file" || exit; done
+```
+
+The related Python suite passed 33 tests, including a real host process with a
+simulated extension sending more than 32 MiB. JavaScript suites passed 51 tests,
+including full long fields, multi-tab retention, cursor pagination, stream/cache
+failures, delayed stream setup, burst body reads, capture clearing and Unicode
+native-frame boundaries. Initial regressions reproduced truncation, the native
+host's 32 MiB rejection and a split Unicode surrogate; these now pass. No user
+installation, extension reload, hosted privacy-page deployment or release was
+performed during that validation. The 0.4.18 release and its actual publication evidence are recorded in `docs/common/history/release-0.4.18.md`; its bundled extension is 0.4.17. Data already lost by an older capture cannot be restored by this fix.
+
+The subsequent checkout reconciliation found an additional pending-counter fix:
+`clear` now resets `pending_bodies`, and completion of an old capture cannot
+decrement the new capture counter. Its regression failed against the published
+0.4.17 extension and passes on the working branch. This follow-up is not in the
+0.4.18 release assets and does not change their response-body retention behavior.
