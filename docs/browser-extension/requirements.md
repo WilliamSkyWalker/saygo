@@ -2,7 +2,7 @@
 
 [操作指南](README.md) · [公共需求与总索引](../common/requirements.md) · [代码核对记录](../common/requirements-audit.md)
 
-核对日期：2026-10-12。以下按当前工作区代码整理，每条均给出入口或实现位置。已有实现不代表本次真机验收通过；缺口保留应达到的需求，并说明代码尚未满足的部分。
+初始核对日期：2026-10-12；本次修复状态更新：2026-10-13。以下按当前工作区代码整理，每条均给出入口或实现位置。已有实现不代表本次真机验收通过；缺口保留应达到的需求，并说明代码尚未满足的部分。
 
 范围是已安装扩展的当前浏览器配置文件中的 HTTP(S) 标签页。CLI、MCP 和桌面应用通过同一个 Native Messaging 桥接入；后台截图与普通视觉输入不前置标签，显式选页会前置，必须区别。
 
@@ -98,3 +98,5 @@
 入口：[扩展桥](../../tests/extension_demo/test_bridge.py)、[共享桥](../../tests/extension_demo/test_shared_bridge.py)、[真实 Chrome](../../tests/extension_demo/test_live.py)、[网络命令](../../tests/control_demo/test_network.py)。历史真实 Chrome、Windows host/WSL 传输与冻结 host 模拟 IPC 的边界见[操作指南](README.md#验收)和[0.4.16](../common/history/release-0.4.16.md)。商店提交/审核、Edge、最小化环境不能据此一并标为通过。
 
 本次只核对源码和文档，不操作现有业务会话。完整验收必须记录环境、连接模式、命令、前后截图、输入结果、断连恢复和未通过项；存在代码的动作也必须在目标设备或应用上单独核验。
+
+本轮源码修复与迁移、六端分别验证的范围见[修复记录](../common/requirements-audit.md#升级与兼容性)。未更新用户安装或发布版本。

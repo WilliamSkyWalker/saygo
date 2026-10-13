@@ -32,6 +32,10 @@ Observe → decide one action → observe again:
 - Coordinates may be `screen`, `percent` (0–100), `image`, or `crop`. Image/crop coordinates require the source observation ID. Saygo performs the conversion; do not manually multiply by screenshot scale. `screenshot --crop LEFT TOP RIGHT BOTTOM` / `device_observe(crop=[...])` also returns a 2× crop with its mapping.
 - A changed target or expired observation requires a fresh observation and a new decision. A stable frame or `dispatched: true` does not verify business success. Inspect the returned result. `wait` supports `stable` / `change` with a timeout, without claiming task completion.
 
+All input commands, including legacy tap/input/key/type-send tools, require the source observation ID. Supply a unique `request_id` (CLI `--request-id`) and preserve the exact arguments when retrieving a lost response; duplicate requests return the stored result without dispatch. Each new input requires a fresh observation. `scroll_up` moves the viewport toward the top of the content on every platform; `scroll_down` moves toward the bottom. Mobile finger gestures run in the opposite direction.
+
+For an uncertain ordinary device request, inspect `device_command(command="operations", session=...)` and observe the result. Its resource stays reserved until review. Use `device_command(command="resolve", session=..., options={"request_id":"ID","resolution":"applied","note":"Observed evidence"})`, or `resolution="not_applied"` when verified. CLI equivalents are `device operations` and `device resolve --session NAME --request-id ID --resolution applied --note EVIDENCE`. Resolution never replays input; observe again and use a new ID for a new action. These resolution values belong to ordinary device requests; tasks use the separate protocol below.
+
 For work spanning resources or agent restarts, use `agent_task` or `saygo task`:
 
 1. Create with resource-to-session bindings, e.g. `{"phone":"test-phone","mail":"test-mail","admin":"test-admin"}`. Save the returned task ID.

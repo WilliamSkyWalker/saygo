@@ -2,7 +2,7 @@
 
 [操作指南](README.md) · [公共需求与总索引](../common/requirements.md) · [代码核对记录](../common/requirements-audit.md)
 
-核对日期：2026-10-12。以下按当前工作区代码整理，每条均给出入口或实现位置。已有实现不代表本次真机验收通过；缺口保留应达到的需求，并说明代码尚未满足的部分。
+初始核对日期：2026-10-12；本次修复状态更新：2026-10-13。以下按当前工作区代码整理，每条均给出入口或实现位置。已有实现不代表本次真机验收通过；缺口保留应达到的需求，并说明代码尚未满足的部分。
 
 范围包含 Android 真机、Android 模拟器、本地主机、WSL→Windows 托管主机与已配置的远程 Appium。`device install` 安装的是模拟器及工具链；QA 的 `--apk`/MCP `install_apk` 才是向设备安装被测 APK。
 
@@ -40,16 +40,16 @@
 
 | 编号 | 需求与验收条件 | 入口或代码位置 | 当前状态 |
 | --- | --- | --- | --- |
-| AND-009 | 截图使用 Appium PNG 或可用 MJPEG 帧转换为 PNG，帧流缺失、过期或解码失败必须回到真实 Appium 截图。 | 驱动.screenshot_raw；帧流.latest | 部分实现：无帧/解码失败可回落，帧龄检查缺失 |
+| AND-009 | 截图使用 Appium PNG 或可用 MJPEG 帧转换为 PNG，帧流缺失、过期或解码失败必须回到真实 Appium 截图。 | 驱动.screenshot_raw；帧流.latest | 已修复：帧龄 0.5 秒；断流/停止清缓存；本轮为离线测试 |
 | AND-010 | 观察区分截图像素和设备逻辑尺寸；检测横竖屏变化，旧图与尺寸不能继续用于定位。 | 驱动._note_screenshot_size/scale；devices/observations | 已有实现；旋转需设备验收 |
 | AND-011 | MJPEG 为可选加速，多设备需不同端口；远程端口不通时仍能截图，不能把所有 device 重连说成持续帧流。 | 驱动._pick_mjpeg_port/_start_mjpeg；会话._platform_from_driver | 部分路径：普通重连未恢复帧流 |
 | AND-012 | 点击和长按使用 W3C 触摸坐标；长按通过统一动作校验时限制 0.1–30 秒，不读取 UI 树定位。 | 驱动._w3c_tap/tap/long_press；devices/actions | 已有实现 |
 | AND-013 | 滑动支持起止坐标和设备命令的 duration_ms，范围 1–30000；时长字段不应被误写为恒定轨迹运动时间。 | 驱动._w3c_swipe；devices/service swipe 分支 | 已有实现；当前时长用于触摸动作中的停留 |
-| AND-014 | 上下滚动提供中央纵向手势；当前 scroll_up 为手指下→上、scroll_down 为手指上→下，不能照搬桌面滚轮含义。 | 驱动.scroll_up/scroll_down | 缺口：跨端方向语义需统一 |
-| AND-015 | 文字输入默认经 UnicodeIME 的 mobile:type，支持中文和自绘输入框；无焦点或全部路径失败时报错。 | 驱动.setup/input_text | 已有实现；目标应用另验 |
-| AND-016 | 输入返回异常但可能已生效时，不得自动改路径再次输入；应先观察核对。 | 驱动.input_text | 缺口：当前异常会回退 active_element.send_keys |
+| AND-014 | 上下滚动使用中央纵向手势；scroll_up 朝内容顶部，手指上→下；scroll_down 朝内容底部，手指下→上。 | 驱动.scroll_up/scroll_down | 已统一方向；实际设备滚动待验收 |
+| AND-015 | 文字输入经 UnicodeIME 的 mobile:type，支持中文和自绘输入框；异常报告结果未知，不换路径重发。 | 驱动.setup/input_text | 已有实现；目标应用另验 |
+| AND-016 | 输入返回异常但可能已生效时，不得自动改路径再次输入；应先观察核对。 | 驱动.input_text | 已修复；模拟回执丢失验证仅派发一次 |
 | AND-017 | Android 按键支持 enter/delete/tab/space/escape/back/home/recent/wakeup/power/sleep/menu 及数字 keycode，未知名称拒绝。 | 驱动.press_key | 已有实现；设备权限仍适用 |
-| AND-018 | 打开应用须明确包名，通过 Appium activate_app；非法包名拒绝，不把 URL 当作已支持的系统深链。 | 驱动.open_target；devices/actions.BASE | 部分能力：open_url 名称仍被通用能力表公布 |
+| AND-018 | 打开应用须明确包名，通过 Appium activate_app；非法包名拒绝，不把 URL 当作已支持的系统深链。 | 驱动.open_target；devices/actions.BASE | 已修复能力声明；仅公布 open_app |
 | AND-019 | 支持 relaunch 保留数据重启、pm_clear 清数据再启动和 none 激活；破坏数据的重置须由用例或用户明确选择。 | 驱动.reset_app；QA 准备 | 已有实现；不是连接默认行为 |
 | AND-020 | 软键盘可见性通过驱动查询供截图提示；无法检测时不能以 false 证明没有键盘。 | 驱动.is_ime_visible；skills/keyboard_detector | 已有实现；失败回 false 的边界 |
 | AND-021 | 本端不宣称支持 hover、double_click、right_click、scroll_at、hotkey、多指缩放或任意应用内语义定位。 | 驱动方法集；devices/actions.capabilities | 当前未提供这些统一动作 |
@@ -86,7 +86,7 @@
 | 编号 | 需求与验收条件 | 入口或代码位置 | 当前状态 |
 | --- | --- | --- | --- |
 | AND-039 | QA 可在指定设备上安装 APK、重连网络设备、清状态/重启；安装失败设备不得继续作为成功设备派发用例。 | `run --device --apk`；QA 准备 | 已有实现；生命周期走 adb 的范围须区分 |
-| AND-040 | 多设备 QA 共用动态任务队列，每个 worker 独占设备及相应账号，报告保留设备归属；不是自动同时跑 Android+iOS。 | qa/execution._run_dispatched_devices | 部分实现：账号不足时仍回退首账号，见 QA-019 |
+| AND-040 | 多设备 QA 共用动态任务队列，每个 worker 独占设备及相应账号，报告保留设备归属；不是自动同时跑 Android+iOS。 | qa/execution._run_dispatched_devices | 已修复：非空账号池不足时启动前拒绝；未知输入停止该 worker |
 | AND-041 | 普通设备与交互任务共享设备锁和 handoff/resume；恢复要新截图，不确定输入要 resolve 后新观察。 | runtime/locking；devices/control；runtime/interactive | 已有实现 |
 | AND-042 | 分别验收真机/模拟器、本地/Windows 托管/远程、首次安装/复用、中文输入、旋转、断线和锁屏；不能用一台模拟器代表全部组合。 | `tests/mobile_demo`、`tests/control_demo/test_agent_service.py` | Windows 托管模拟器有历史实测；其余待验收 |
 
@@ -95,3 +95,5 @@
 离线入口：[移动发现与连接](../../tests/mobile_demo/test_mobile.py)、[安装](../../tests/mobile_demo/test_provision.py)、[主机](../../tests/mobile_demo/test_hosts.py)、[worker 包结构](../../tests/mobile_demo/test_bundle.py)、[共享操作](../../tests/control_demo/test_agent_service.py)。历史 WSL→Windows API 35 模拟器安装、截图、设置启动、点击和搜索输入见[操作指南](README.md#验收与待办)。未获得所有主机及真机完整业务证据。
 
 本次只核对源码和文档，不操作现有业务会话。完整验收必须记录环境、连接模式、命令、前后截图、输入结果、断连恢复和未通过项；存在代码的动作也必须在目标设备或应用上单独核验。
+
+本轮源码修复与迁移、六端分别验证的范围见[修复记录](../common/requirements-audit.md#升级与兼容性)。未更新用户安装或发布版本。

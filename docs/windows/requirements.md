@@ -2,7 +2,7 @@
 
 [操作指南](README.md) · [公共需求与总索引](../common/requirements.md) · [代码核对记录](../common/requirements-audit.md)
 
-核对日期：2026-10-12。以下按当前工作区代码整理，每条均给出入口或实现位置。已有实现不代表本次真机验收通过；缺口保留应达到的需求，并说明代码尚未满足的部分。
+初始核对日期：2026-10-12；本次修复状态更新：2026-10-13。以下按当前工作区代码整理，每条均给出入口或实现位置。已有实现不代表本次真机验收通过；缺口保留应达到的需求，并说明代码尚未满足的部分。
 
 范围包含原生 Windows 窗口、WSL→Windows 窗口和原生整机控制。普通原生前台驱动、后台 runner、显式 `--foreground` runner 是不同路径，支持动作与剪贴板行为分别列出。RDP 为公共兼容功能，不算本端已通过的后台实现。
 
@@ -88,3 +88,5 @@
 回归入口：[窗口控制](../../tests/control_demo/test_desktop.py)、[显式前台命令](../../tests/control_demo/test_foreground_cli.py)、[独立 Windows 窗口实测](../../tests/control_demo/test_background_live.py)、[桌面产品测试](../../tests/desktop_demo/)。历史隔离窗口、整机截图/应用发现、三平台冻结包的范围见[操作指南](README.md#验收与限制)和[0.4.16 记录](../common/history/release-0.4.16.md)。这些证据不涵盖所有 Windows 应用。
 
 本次只核对源码和文档，不操作现有业务会话。完整验收必须记录环境、连接模式、命令、前后截图、输入结果、断连恢复和未通过项；存在代码的动作也必须在目标设备或应用上单独核验。
+
+本轮源码修复与迁移、六端分别验证的范围见[修复记录](../common/requirements-audit.md#升级与兼容性)。未更新用户安装或发布版本。

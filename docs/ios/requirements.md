@@ -2,7 +2,7 @@
 
 [操作指南](README.md) · [公共需求与总索引](../common/requirements.md) · [代码核对记录](../common/requirements-audit.md)
 
-核对日期：2026-10-12。以下按当前工作区代码整理，每条均给出入口或实现位置。已有实现不代表本次真机验收通过；缺口保留应达到的需求，并说明代码尚未满足的部分。
+初始核对日期：2026-10-12；本次修复状态更新：2026-10-13。以下按当前工作区代码整理，每条均给出入口或实现位置。已有实现不代表本次真机验收通过；缺口保留应达到的需求，并说明代码尚未满足的部分。
 
 范围包含 iPhone/iPad 真机、Xcode iOS 模拟器与远程 Mac 上的 Appium。当前有代码和模拟测试，不将 macOS 桌面通过或 Android 通过算作 iOS 真机通过。
 
@@ -52,17 +52,17 @@
 
 | 编号 | 需求与验收条件 | 入口或代码位置 | 当前状态 |
 | --- | --- | --- | --- |
-| IOS-018 | 截图优先可用新鲜 MJPEG 帧，否则回落 Appium PNG；保留 Retina 比例、逻辑尺寸和旋转后的映射。 | 驱动.screenshot_raw/_note_screenshot_size/scale；帧流 | 部分实现：缺帧龄检查；真机待验收 |
+| IOS-018 | 截图优先可用新鲜 MJPEG 帧，否则回落 Appium PNG；保留 Retina 比例、逻辑尺寸和旋转后的映射。 | 驱动.screenshot_raw/_note_screenshot_size/scale；帧流 | 已修复帧龄与断流失效；真机待验收 |
 | IOS-019 | 多设备帧流端口不能冲突，远程端口不通不阻断普通截图；普通 device 重连目前不自动恢复 MJPEG。 | 驱动._pick_mjpeg_port；会话._platform_from_driver | 部分路径支持帧流 |
 | IOS-020 | 支持坐标单击和长按，统一 act 长按 0.1–30 秒；实际行为由设备 Appium 触摸链验证。 | 驱动.tap/long_press；devices/actions | 已有实现；真机待验收 |
 | IOS-021 | 支持起止坐标滑动和可配置 duration_ms；不把触摸链中的停留时间承诺为精确手指移动时间。 | 驱动._w3c_swipe；devices/service | 已有实现；手势时序待设备验收 |
-| IOS-022 | 上下滚动按中央触摸手势实现；scroll_up 为手指下→上、scroll_down 为手指上→下，与桌面滚轮含义不同须明确。 | 驱动.scroll_up/scroll_down | 缺口：跨端方向语义需统一 |
+| IOS-022 | 上下滚动使用中央触摸手势；scroll_up 朝内容顶部，手指上→下；scroll_down 朝内容底部，手指下→上。 | 驱动.scroll_up/scroll_down | 已统一方向；iOS 真机待验收 |
 | IOS-023 | 文字写入当前聚焦元素，支持中文；输入前须通过截图确认焦点，不向模型返回元素树。 | 驱动.input_text | 已有实现；实际键盘/控件待验收 |
-| IOS-024 | 输入超时且是否生效未知时先核对，不可改用 mobile:keys 自动重复派发。 | 驱动.input_text | 缺口：当前 send_keys 异常后会回退 mobile:keys |
+| IOS-024 | 输入超时且是否生效未知时先核对，不可改用 mobile:keys 自动重复派发。 | 驱动.input_text | 已修复：send_keys 异常后停止，模拟测试仅派发一次 |
 | IOS-025 | 按键仅提供 home、enter、delete；Home 调系统按钮、Enter 输入换行、Delete 向焦点元素发退格，其他名称明确拒绝。 | 驱动.press_key | 已有实现；Delete 焦点查找需真机验证 |
 | IOS-026 | iOS 返回动作应点可见返回按钮或做返回手势，不提供 Android back/recent/power 或桌面组合键。 | 驱动.press_key；iOS 提示协议 | 当前不支持这些系统键 |
 | IOS-027 | 打开应用通过 bundle ID 激活；relaunch 可终止再激活，Android pm_clear 不应宣称为 iOS 清数据。 | 驱动.open_target/reset_app | 已有实现；iOS 未实现清数据重置 |
-| IOS-028 | 本端不提供通用 open_url/deeplink、hover、双击、右键、定点滚轮、hotkey 或多指缩放承诺。 | 驱动方法集；devices/actions.BASE | 部分能力：通用能力表仍错误包含 open_url |
+| IOS-028 | 本端不提供通用 open_url/deeplink、hover、双击、右键、定点滚轮、hotkey 或多指缩放承诺。 | 驱动方法集；devices/actions.BASE | 已修复：能力表不再包含 open_url |
 | IOS-029 | 锁屏、休眠、拔线或受保护内容导致截图失败时报告不可用；iOS 键盘检测返回 false 不能证明键盘已关闭。 | 驱动.screenshot_raw/is_ime_visible | 环境限制；键盘检测未实现 |
 
 ## 会话、任务与验收
@@ -80,3 +80,5 @@
 离线入口：[移动设备测试](../../tests/mobile_demo/test_mobile.py)、[安装测试](../../tests/mobile_demo/test_provision.py)、[主机测试](../../tests/mobile_demo/test_hosts.py)、[共享动作测试](../../tests/control_demo/test_agent_service.py)。真机和完整 Xcode 配置链仍待验收，见[操作指南](README.md#验收与待办)。iOS 每项硬件验收须单列，不能从共享驱动或模拟响应推导通过。
 
 本次只核对源码和文档，不操作现有业务会话。完整验收必须记录环境、连接模式、命令、前后截图、输入结果、断连恢复和未通过项；存在代码的动作也必须在目标设备或应用上单独核验。
+
+本轮源码修复与迁移、六端分别验证的范围见[修复记录](../common/requirements-audit.md#升级与兼容性)。未更新用户安装或发布版本。

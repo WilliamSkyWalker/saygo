@@ -43,7 +43,7 @@ WSL 不会被视为原生本机桌面。窗口与整机绑定不能混用；所�
 saygo device connect --platform windows --app 'Example App' --session win-bg --background
 saygo device screenshot --session win-bg
 saygo device act '{"type":"tap","x":50,"y":40,"coordinate_space":"percent"}' --session win-bg --observation-id OBSERVATION_ID --observe-after
-saygo device input '测试文字' --session win-bg
+saygo device input '测试文字' --session win-bg --observation-id AFTER_TAP_OBSERVATION_ID --request-id input-001
 ```
 
 原生 Windows 后台与 WSL 都使用 PowerShell/Win32 runner，通过 PrintWindow 截图和窗口定向控件操作，不注入全局鼠标、键盘或剪贴板。缺 PowerShell、窗口关闭或截图不可用时报错，不自动切换前台或整屏截图。
@@ -59,9 +59,9 @@ saygo device input '测试文字' --session win-bg
 ```sh
 saygo device focus --session win-bg --out /tmp/window.png
 # 先填写并检查草稿，不点击发送。
-saygo device type-send '测试消息' --session win-bg --foreground --replace --prepare-only --input-x 400 --input-y 620 --out /tmp/draft.png
+saygo device type-send '测试消息' --session win-bg --foreground --replace --prepare-only --input-x 400 --input-y 620 --out /tmp/draft.png --observation-id FOCUS_OBSERVATION_ID --request-id draft-001
 # 按新截图确认目标与草稿后，使用真实坐标提交并核验。
-saygo device tap 800 690 --session win-bg --foreground --out /tmp/result.png
+saygo device tap 800 690 --session win-bg --foreground --out /tmp/result.png --observation-id DRAFT_OBSERVATION_ID --request-id submit-001
 ```
 
 上述坐标仅为格式示例；Windows 原生终端将 `/tmp` 换成可写的 Windows 路径。`--replace` 先选中输入字段内容。没有 `--prepare-only` 时，type-send 必须有发送坐标，在同一控制器连接内完成授权提交。

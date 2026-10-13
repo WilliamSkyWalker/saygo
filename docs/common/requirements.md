@@ -59,7 +59,7 @@
 | CORE-005 | CLI help 和直接设备控制不得强制加载 QA、OpenAI、Appium 等无关可选依赖。 | 已有实现 |
 | CORE-006 | CLI/MCP 同名会话在相同 SAYGO_HOME_DIR 下绑定相同目标；任务库允许 SAYGO_RUNTIME_DIR 覆盖。 | 已有实现 |
 | CORE-007 | 输入派发成功、画面稳定和业务成功必须分开表达；成功回执不得代替结果验证。 | 已有实现 |
-| CORE-008 | 不支持的平台、动作和能力明确报错；不得偷偷换后端或创建默认手机会话。 | 部分实现；能力声明过宽见 OBS-013 |
+| CORE-008 | 不支持的平台、动作和能力明确报错；不得偷偷换后端或创建默认手机会话。 | 已有实现；按端公布能力，负向测试见 OBS-013 |
 | CORE-009 | MCP 的 full/device profile 各有明确工具白名单；device 模式无 QA 密钥/用例目录也可握手，裁剪失败不能静默暴露 full。来源：`mcp/server._apply_profile`。 | 已有实现 |
 | CORE-010 | MCP 工具 stdout 只输出协议，辅助日志转 stderr；图片返回 Content 图像块，SDK 兼容范围逐版本验证。来源：`mcp/server._silenced_stdout/_image_result`。 | 已有实现；SDK 全范围不是本次验收 |
 | CORE-011 | `device list/sessions`、任务状态、QA run ID 与 workflow run ID 分别解释；命令失败给错误类型/退出码，不混成统一业务通过。来源：`commands/*`、`runtime/cli.py`。 | 已有实现；各入口错误结构仍不同 |
@@ -73,7 +73,7 @@
 
 | 编号 | 验收需求 | 实现状态 |
 | --- | --- | --- |
-| SESSION-001 | 命名会话持久化平台、设备、浏览器页或桌面窗口绑定，重连不得暗中改绑。 | 部分实现；macOS 前台重连按应用重新选窗，见 MAC-004 |
+| SESSION-001 | 命名会话持久化平台、设备、浏览器页或桌面窗口绑定，重连不得暗中改绑。 | 已修复 macOS 前台 PID/窗口恢复；本轮离线验证，真机待验收 |
 | SESSION-002 | 设备发现区分在线、离线、未授权；多候选要求选择，单候选才允许自动选择。 | 已有实现 |
 | SESSION-003 | 会话列表区分保存记录、明确断开和后端策略不可用；真实在线状态通过实际请求诊断，不能由文件存在推定。 | 已有列表/诊断实现；sessions 本身不探活 |
 | SESSION-004 | 连接、断开与停止分开；断开控制器不得默认关闭用户浏览器或模拟器。 | 已有实现 |
@@ -86,7 +86,7 @@
 | SESSION-011 | 命名会话校验路径安全，持久绑定通过临时文件和原子替换写入；损坏状态不能作为可用会话。来源：`platforms/device_session._key/save_state/load_state`。 | 已有实现 |
 | SESSION-012 | `resources list/bind` 原子维护项目资源别名，bind 要求已有会话，未提供 task bindings 时从项目配置读取。来源：`commands/doctor.resources`、`commands/task.dispatch`。 | 已有实现 |
 | SESSION-013 | `doctor --session` 返回诊断、能力与真实截图可读性；未给显式 probe-action 时不得派发输入，必须标 input_check 未测试。来源：`commands/doctor.diagnose`。 | 已有实现 |
-| SESSION-014 | 相同物理设备、桌面或共享扩展桥不能因换别名、任务库目录或入口而绕过资源占用；拒绝原因指出占用者。来源：`runtime/locking.py`。 | 已有实现；QA 的等价覆盖未承诺 |
+| SESSION-014 | 相同物理设备、桌面或共享扩展桥不能因换别名、任务库目录或入口而绕过资源占用；拒绝原因指出占用者。来源：`runtime/locking.py`。 | device/task/workflow 与 QA 动作共用资源锁；QA 不等于 task 生命周期 |
 
 <a id="obs"></a>
 
@@ -100,7 +100,7 @@
 | OBS-002 | 支持 screen、percent、image、crop 坐标；image/crop 必须有来源观察。 | 已有实现 |
 | OBS-003 | 百分比坐标 0–100，边缘落在最后有效像素；拒绝布尔值、非数、无穷和越界。 | 已有实现 |
 | OBS-004 | 裁剪保留原图映射及放大倍率；不把截图像素当作 CSS 或设备逻辑像素。 | 已有实现 |
-| OBS-005 | 依赖画面的动作使用来源观察，并拒绝超过 30 秒或已失效的目标；设备旧接口与 task 的强制程度须区分。 | 部分实现；详见 OBS-014 |
+| OBS-005 | 依赖画面的动作使用来源观察，并拒绝超过 30 秒或已失效的目标；普通 device 与 QA 输入也须通过观察检查。 | 已有实现；像素变化检查是启发式保护 |
 | OBS-006 | 带观察动作派发前核对页面、URL、窗口、进程、边界、尺寸和像素变化；局部目标变化须拒绝。 | 已有实现；不代表无观察参数的旧入口同样校验 |
 | OBS-007 | 动作能力由实际后端公布，含指针、触摸、文字、按键、滚动及页面操作。 | 已有实现 |
 | OBS-008 | 输入、URL、按键、应用及页面 ID 必须非空；长按时间与滚动幅度须有界。 | 已有实现 |
@@ -108,15 +108,15 @@
 | OBS-010 | 稳定/变化等待有时间上限并返回 condition_met/timed_out，不宣称业务成功。 | 已有实现 |
 | OBS-011 | 每次滚动观察目标区域，首次约半屏校准，连续浏览按可见高度 85–90% 保留重叠，接近目标 10–20%，无变化先诊断再决定。 | 已有提示与桌面前后图；不是所有驱动强制的位移算法 |
 | OBS-012 | MCP 观察及有观察的动作返回图像内容；CLI 返回图像路径和元数据。 | 已有实现 |
-| OBS-013 | 输入能力应按端和模式公布：手机只启动应用、浏览器只导航页面，不能由统一 BASE 集合推导所有端均支持 open_url/open_app。来源：`devices/actions.capabilities`、各驱动 open_target。 | 缺口：BASE 仍普遍包含两类动作 |
-| OBS-014 | 依赖画面的操作须携带原观察；明确说明旧 tap/input/key/type-send 及无 observation_id 的 act 没有相同的来源观察保护。来源：`devices/service._execute`。 | 部分实现：task 强制，低级设备接口未统一强制 |
+| OBS-013 | 输入能力应按端和模式公布：手机只启动应用、浏览器只导航页面，不能由统一 BASE 集合推导所有端均支持 open_url/open_app。来源：`devices/actions.capabilities`、各驱动 open_target。 | 已修复；按平台和 supported_actions 声明，离线负向测试通过 |
+| OBS-014 | 依赖画面的操作须携带原观察；act、旧 tap/input/key/type-send 等输入统一检查 observation_id，缺失或失效时不派发。来源：`devices/service._execute`。 | 已修复；旧调用方必须补观察 ID |
 | OBS-015 | 每次观察保存独立源图、SHA256 与元数据，自定义输出路径覆盖不得破坏已保存观察证据；裁剪扩大 2 倍仍能映射回原坐标。来源：`devices/observations.capture/load`。 | 已有实现 |
 | OBS-016 | 变化检测比较尺寸和超过强度阈值的像素；stable 连续约 0.6 秒不超阈值、change 相对初图检测，1 次稳定不等于业务结果。来源：`devices/observations.change_fraction/wait`。 | 已有实现；底层截图耗时仍取决于驱动 |
-| OBS-017 | 普通 device 操作记录 operation_id、请求、派发意图、结果及后截图，落盘失败应可见；日志不等同 task 的跨调用去重。来源：`devices/service.execute/_record`。 | 已有实现；普通 device 无调用方 request_id 去重 |
-| OBS-018 | type-send 明确草稿/提交、替换/追加、发送坐标与等待时间；异常返回是否尝试提交，结果未知先观察，不能直接再调用。来源：`commands/device`、`devices/service`。 | 已有实现；复合步骤不是逐动作核验 |
-| OBS-019 | 跨端滚动统一描述内容方向与手势方向，公开定点单位、幅度和默认位置；应用未滚动不能判成功。来源：`devices/scrolling.py`、各驱动滚动方法。 | 部分实现：移动手势与桌面方向名称不同 |
-| OBS-020 | 所有图像源必须检查新鲜度，帧流中断不得无限复用旧帧，回落截图失败则报告不可观察。来源：`platforms/mjpeg.latest`、`appium.screenshot_raw`。 | 缺口：MJPEG 无帧龄检查且断流不清缓存 |
-| OBS-021 | 输入发生不确定异常时停止并核对，不能在同一调用中换驱动路径再次输入。来源：`platforms/appium.input_text`。 | 缺口：Android/iOS 均有异常后备输入路径 |
+| OBS-017 | 普通 device 操作记录 operation_id、请求、派发意图、结果及后截图；调用方 request_id 在相同会话内持久去重，异参复用拒绝，operations 可查待核对请求。来源：`devices/service`、`devices/requests`。 | 已实现；崩溃、并发、重复查询离线测试通过 |
+| OBS-018 | type-send 明确草稿/提交、替换/追加、发送坐标与等待时间；异常返回是否尝试提交，结果未知先观察，不能直接再调用。来源：`commands/device`、`devices/service`。 | 已加强：原观察、提交前目标区域核对、持久请求；复合步骤仍非原子事务 |
+| OBS-019 | 跨端滚动统一描述内容方向与手势方向，公开定点单位、幅度和默认位置；应用未滚动不能判成功。来源：`devices/scrolling.py`、各驱动滚动方法。 | 已统一：up 朝顶部、down 朝底部；实际滚动量须按端观察 |
+| OBS-020 | 所有图像源必须检查新鲜度，帧流中断不得无限复用旧帧，回落截图失败则报告不可观察。来源：`platforms/mjpeg.latest`、`appium.screenshot_raw`。 | 已修复：MJPEG 帧龄上限 0.5 秒，断流/停止清缓存；设备实测待补 |
+| OBS-021 | 输入发生不确定异常时停止并核对，不能在同一调用中换驱动路径再次输入。来源：`platforms/appium.input_text`。 | 已修复：输入异常标为结果不确定，不调用后备输入 |
 
 <a id="task"></a>
 
@@ -218,7 +218,7 @@
 | MOBILE-001 | Android/iOS 视觉动作通过 Appium；adb/simctl 用于发现与生命周期，不旁路视觉控制。 | 已有实现；按端记录硬件验收 |
 | MOBILE-002 | 连接现有手机不默认重置设备或打开应用，设备授权由用户完成。 | 已有实现；按端记录硬件验收 |
 | MOBILE-003 | Android 使用 UiAutomator2 与 Unicode 输入；iOS 使用 XCUITest 与已有签名配置。 | 已有实现；按端记录硬件验收 |
-| MOBILE-004 | MJPEG 无可用新帧时回落 Appium 截图，不把旧帧或无帧作为当前画面。 | 部分实现：无帧/解码失败可回落，帧龄检查缺失，见 OBS-020 |
+| MOBILE-004 | MJPEG 无可用新帧时回落 Appium 截图，不把旧帧或无帧作为当前画面。 | 已修复帧龄与断流失效；回落截图失败显式报错 |
 | MOBILE-005 | Android 安装计划包含主机、磁盘、加速与工具组件，dry-run 不安装或下载。 | 已有实现；按端记录硬件验收 |
 | MOBILE-006 | 安装复用 SDK/Java/AVD，直接下载文件校验 SHA256，失败返回真实错误。 | 已有实现；按端记录硬件验收 |
 | MOBILE-007 | 同名 AVD 异镜像拒绝覆盖；已有运行 AVD 按名称复用，不随意选择别台设备。 | 已有实现；按端记录硬件验收 |
@@ -308,16 +308,16 @@
 | QA-016 | run 接受单文件、目录、目标名、Markdown TC 块、文本及 Gherkin 用例；new/list 提供目标模板与发现，创建时保护已有文件。来源：`commands/targets`、`qa/cases._resolve_test_target`。 | 已有实现 |
 | QA-017 | 平台标签是集合且只做筛选，manual/partial/skip/wip 不伪装通过；不因一个 android/ios 标签自动切换驱动。来源：`qa/gherkin`、`qa/cases`。 | 已有实现；旧 both 仍作为兼容无限制值 |
 | QA-018 | 前置条件 prepend 到每条用例，账号占位符按 worker 替换，运行时 epoch/uuid 数据逐场景生成；普通输入变体用 Examples。来源：`qa/cases`、`commands/run`。 | 已有实现 |
-| QA-019 | 并行设备需要足够独立账号，账号不足应拒绝或明确提示共享，不能静默复用首账号导致干扰。来源：`qa/execution._run_dispatched_devices`。 | 缺口：当前不足时回退 accounts[0] |
-| QA-020 | 多 Android 设备用共享动态队列，各 worker 固定设备与账号，部分设备初始化失败可降级并记录，全部失败则终止。来源：`qa/execution._run_dispatched_devices`。 | 已有实现；账号不足例外见 QA-019 |
+| QA-019 | 并行设备指定非空账号池时，账号数量不足须在创建 Agent 前拒绝，不能静默复用首账号；无账号用例可以不配置账号池。来源：`qa/execution._run_dispatched_devices`。 | 已修复；数量足够不等于程序已证明各账号值互不相同 |
+| QA-020 | 多 Android 设备用共享动态队列，各 worker 固定设备与账号，部分设备初始化失败可降级并记录，全部失败则终止。来源：`qa/execution._run_dispatched_devices`。 | 已有实现；账号不足拒绝，未知输入停止相应 worker |
 | QA-021 | 手动 shard N/M 使用 0 起始连续切片，校验范围；非法分片终止，不能默默跑全集。来源：`commands/run.cmd_run`。 | 已有实现 |
-| QA-022 | Selenium Grid 并发复用有限 Agent 池并聚合结果；只清理本任务所有的会话，不能删除共享 Grid 上其他用户会话。来源：`qa/execution._run_concurrent`、`platforms/selenium_grid.py`。 | 部分实现；清理无所有权过滤，见代码核对记录 |
+| QA-022 | Selenium Grid 并发复用有限 Agent 池并聚合结果；只清理本任务所有的会话，不能删除共享 Grid 上其他用户会话。来源：`qa/execution._run_concurrent`、`platforms/selenium_grid.py`。 | 已修复：启动不全局清理；显式清理只接受所属 session ID |
 | QA-023 | 后台 QA 返回 run ID、PID、日志和元数据，status/MCP 查询区分运行、完成、异常退出及产物路径，不把陈旧元数据当活进程。来源：`commands/background.py`、`mcp/server`。 | 已有实现 |
 | QA-024 | MCP full 提供目标/用例分页、启动目标/单例、取消、状态、日志尾部与 JSON/HTML 报告；设备模式不混入这些跑测工具。来源：`mcp/server.py`。 | 已有实现 |
 | QA-025 | 报告支持 JSON 与含截图 HTML，汇总 pass/fail/skipped/error 并保留用例、步骤、耗时、设备和 probe 未验证项。来源：`qa/report.py`。 | 已有实现 |
 | QA-026 | 分层模型独立选择 Brain/Planner/Locator 与定位端点；空配置回落规则明确，桌面模型客户端与 QA 模型客户端分别配置。来源：`config.py`、`qa/brain.py`、`vision/locator.py`。 | 已有实现 |
 | QA-027 | QA 的外部 MCP 工具来自私有配置，可调用声明的工具并保存上下文；这不是 workflow 已提供通用 API/MCP 连接器。来源：`mcp/client.py`、`qa/brain._call_with_tools`。 | 已有实现；工具效果需单独核验 |
-| QA-028 | QA 直接平台动作和重置路径与 device 服务分别核验，不声称自动享有相同持久去重、资源锁和观察 ID 保护。来源：`qa/agent.py`、`qa/device_setup.py`。 | 实现边界；统一保护待补齐 |
+| QA-028 | QA 截图与输入通过共享观察、资源锁和持久请求记录；结果未知保留证据、停止该设备后续输入并等待核对，不自动重试。来源：`qa/control.py`、`devices/service.execute_observed`、`qa/agent.py`。 | 已接入；模拟驱动验收通过；QA 不提供 task 的完整接管恢复生命周期 |
 | QA-029 | 参考图从用例 ref 元数据加载并参与视觉比对；图像差、OCR 提示或文本证据校验不能代替独立的业务事实验证。来源：`qa/agent._load_reference_images`、`qa/step_validator`。 | 已有实现；确定性交叉核验仍是计划 |
 
 <a id="probe"></a>
@@ -358,7 +358,7 @@
 | CONFIG-006 | 日志、报告与网络记录用途清晰，敏感资料不进入发布白名单。 | 已有实现 |
 | CONFIG-007 | 环境变量分组覆盖模型、Appium、浏览器、桌面、RDP、QA、图像技能和 probes；入口专用参数需说明，不因同名字段就推定所有入口都读取。来源：`config.py`、各 commands。 | 已有实现；入口存在差异 |
 | CONFIG-008 | 外部 MCP 配置支持 command/args/env 与工具名映射，环境占位符在启动时展开；未配置文件时视为空注册表。来源：`mcp/client.load_clients_config`。 | 已有实现 |
-| CONFIG-009 | 日志可按 worker/case 区分、verbose 提供诊断；凭据脱敏需包括所有敏感字段，不能仅屏蔽名称含 pass/secret 的账号字段。来源：`logger.py`、`qa/execution.py`。 | 部分实现：其他账号字段可能入日志 |
+| CONFIG-009 | 日志可按 worker/case 区分、verbose 提供诊断；凭据脱敏需包括所有敏感字段，不能仅屏蔽名称含 pass/secret 的账号字段。来源：`logger.py`、`qa/execution.py`。 | 已修复已配置账号值的日志过滤，含自定义/嵌套字段及异常；报告与截图仍可能含私有数据 |
 
 <a id="install"></a>
 
@@ -449,7 +449,7 @@
 | OTHER-010 | Figma 可通过私有 MCP 工具映射或 REST 获取设计数据/PNG；设计稿元数据不等于向设备视觉操作提供 DOM/UI 树。来源：`integrations/figma.py`、`figma_via_mcp.py`。 | 已有实现；CLI 当前仍预检 FIGMA_TOKEN |
 | OTHER-011 | 旧 drive JSONL 渲染器保留步骤、截图、状态及错误生成 HTML，删除旧专用 Skill 不删除该可执行能力。来源：`drive/render.py`。 | 已有实现 |
 | OTHER-012 | 图像技能按配置顺序执行：加载、键盘、滚动、图像差、提示检测及可选裁剪/OCR/颜色/布局；不适用可跳过，异常记录且不直接判业务成功。来源：`skills/__init__.py` 及各技能。 | 已有实现；OCR 自动交叉裁决未实现 |
-| OTHER-013 | Selenium QA 保留本地/远程 Grid、窗口尺寸、截图与坐标鼠标键盘；不能把它的生命周期、页面管理与扩展/Playwright 混用。来源：`platforms/browser.py`。 | 已有实现；共享 Grid 清理存在缺口 |
+| OTHER-013 | Selenium QA 保留本地/远程 Grid、窗口尺寸、截图与坐标鼠标键盘；不能把它的生命周期、页面管理与扩展/Playwright 混用。来源：`platforms/browser.py`。 | 已有实现；共享 Grid 清理限制为明确拥有的会话 |
 | OTHER-014 | RDP 通过独立 Xvfb/FreeRDP 会话提供截图、点击、拖动、滚动、映射按键及程序启动；当前输入仅 ASCII，缺依赖/连接失败明确报错。来源：`platforms/rdp.py`。 | 实验实现；Unicode 及完整业务未承诺 |
 | OTHER-015 | 官网中的安装入口、六端边界、商店状态和版本说明与实际交付一致，语言偏好持久保存；部署不等于软件发布。来源：`website-project/index.html`、发布配置。 | 已有页面；线上状态未在本次核验 |
 
@@ -467,4 +467,4 @@
 
 上次文档重排统一了旧文档中普通设备命令的资源锁、setup 入口、后台截取适用端及发布状态表述。更新提醒的 0.4.14 和共享桥/桌面的 0.4.16 交付证据已归档；本次不重新声明远端在线状态，不改变用户安装或版本号。
 
-本轮补全按代码入口增加公共条目和六端独立清单，并修正过度概括的状态；具体缺口见[代码核对记录](requirements-audit.md)。本轮未修复这些运行时代码，也未新增真机或发布结论。
+本轮补全按代码入口增加公共条目和六端独立清单，并修正过度概括的状态；具体缺口见[代码核对记录](requirements-audit.md)。2026-10-13 已修复核对记录中的十类代码缺口；测试范围与迁移要求见该记录，源码修改不等于用户安装已更新。

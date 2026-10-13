@@ -2,7 +2,7 @@
 
 [操作指南](README.md) · [公共需求与总索引](../common/requirements.md) · [代码核对记录](../common/requirements-audit.md)
 
-核对日期：2026-10-12。以下按当前工作区代码整理，每条均给出入口或实现位置。已有实现不代表本次真机验收通过；缺口保留应达到的需求，并说明代码尚未满足的部分。
+初始核对日期：2026-10-12；本次修复状态更新：2026-10-13。以下按当前工作区代码整理，每条均给出入口或实现位置。已有实现不代表本次真机验收通过；缺口保留应达到的需求，并说明代码尚未满足的部分。
 
 范围是 CLI/Runtime 使用 CDP 接入的独立 Chromium。它不是 MCP 后端，也不自动接管用户日常浏览器。Selenium 保留在 QA 兼容入口，不能混入 Playwright 验收。
 
@@ -60,7 +60,7 @@
 | PW-025 | 普通上下滚动请求 300 CSS 像素，沿用当前指针位置；不能把扩展的视口中心规则写成本端行为。 | 驱动.scroll_up/scroll_down | 已有实现 |
 | PW-026 | 导航、前进、后退等待 DOMContentLoaded；加载完成不证明业务成功，超时后先观察，不自动重试输入。 | 驱动.open_target/_handle_platform_action | 已有实现 |
 | PW-027 | 截图/连接/导航设置超时，坐标动作不具 Locator 的可操作性自动等待；使用共享稳定/变化等待并核验截图。 | 驱动.connect/_watch_contexts/screenshot_raw | 已有实现 |
-| PW-028 | 只声明明确的页面导航动作；通用能力表不应把 open_app 公布成浏览器启动本机应用的能力。 | devices/actions.BASE；驱动.open_target | 缺口：open_app 目前会走页面导航 |
+| PW-028 | 只声明明确的页面导航动作；通用能力表不应把 open_app 公布成浏览器启动本机应用的能力。 | devices/actions.BASE；驱动.open_target | 已修复：仅公布 open_url，不将 open_app 当导航别名 |
 
 ## 任务、接管与边界
 
@@ -77,3 +77,5 @@
 入口：[Playwright 契约](../../tests/browser_demo/test_playwright.py)、[真实 Chromium](../../tests/browser_demo/test_playwright_live.py)、[Runtime](../../tests/runtime_demo/test_runtime.py)。真实测试运行边界见[操作指南](README.md#验证与边界)。测试工具使用 Playwright 去验扩展，并不表示 MCP 可使用 Playwright 后端。
 
 本次只核对源码和文档，不操作现有业务会话。完整验收必须记录环境、连接模式、命令、前后截图、输入结果、断连恢复和未通过项；存在代码的动作也必须在目标设备或应用上单独核验。
+
+本轮源码修复与迁移、六端分别验证的范围见[修复记录](../common/requirements-audit.md#升级与兼容性)。未更新用户安装或发布版本。

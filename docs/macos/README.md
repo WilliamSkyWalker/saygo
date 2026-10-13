@@ -17,7 +17,9 @@ saygo device capabilities --session mac-test
 saygo device screenshot --session mac-test
 ```
 
-前台驱动可能打开或前置应用。Retina 截图像素与逻辑坐标可能不同，使用返回映射或百分比动作，不直接用截图像素估算。原生整机控制使用：
+前台驱动可能打开或前置应用。命名会话保存 PID 与窗口 ID；多窗口时须从 `device list` 选择并在连接时指定 `--window-id WINDOW_ID`。原窗口关闭或所属进程改变时拒绝操作，须显式选择新窗口；旧绑定没有窗口 ID 时也须重新连接。
+
+Retina 截图像素与逻辑坐标可能不同，使用返回映射或百分比动作，不直接用截图像素估算。原生整机控制使用：
 
 ```sh
 saygo device connect --platform desktop --desktop-scope computer --session local-computer

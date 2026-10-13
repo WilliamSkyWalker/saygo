@@ -1,44 +1,37 @@
-# Saygo 0.4.16：共享浏览器桥与原生桌面连接
+# Saygo 0.4.17：统一输入保护与需求缺口修复
 
-Windows 桌面版和 WSL 曾选择不同 native-host 目录，扩展连接一端时另一端可能显示离线，单独升级 PyPI 包也无法解决。本版按浏览器所在系统发现注册及在线 host，使客户端共用连接。
+本版修复需求核对中发现的十类代码缺口，让普通 CLI/MCP 和 QA 输入共享观察检查、物理资源互斥与持久请求记录；保留输入是否生效的实际证据。
 
-## 浏览器连接与升级修复
+## 主要修改
 
-- Windows 桌面版、Windows Python 与 WSL 共用桥；新安装使用 %LOCALAPPDATA%/Saygo/browser-bridge，保留已有可用旧目录。
-- 报告连接前实际探测 host。多个在线 host、扩展身份不一致或无响应时明确报错，不静默改连浏览器。
-- 包启动检查实际注册和在线目录，同版本也修复注册漂移，不断开现有扩展。
-- 保留页面绑定，过期时显式建立命名会话并选择正确页面。
-- 对 Windows 状态文件共享冲突做有界重试，避免并发读取使 host 退出；不重放浏览器动作。
-- 展示真实连接失败原因，native-host 诊断版本为 0.4.16。
+- 普通输入必须携带来源观察 ID；相同会话、请求 ID 和有效参数只派发一次。新增 `device operations` 查询及 `device resolve` 人工核对入口，崩溃或回执丢失不会自动重放。
+- QA 动作接入共享保护，用例期间锁定物理资源。未知结果保留当前动作、截图和请求记录，停止该设备后续用例；不自动重复输入，也不丢弃此前结果。
+- macOS 前台连接保存并恢复 PID/窗口 ID，拒绝失效或被其他进程复用的窗口；多窗口须显式选择。
+- MJPEG 超过 0.5 秒的帧失效，断流/停止清缓存并回落 Appium 截图；回落失败明确报错。
+- Android/iOS 输入异常后不再切换方法重新输入。滚动统一为 up 朝内容顶部、down 朝底部，移动手指方向与之相反。
+- 按端声明导航和应用启动能力；浏览器不公布 open_app，手机不公布 open_url。
+- 非空账号池不足时在启动前拒绝；QA 日志过滤已配置账号值，包括嵌套、自定义字段和异常内容。报告与截图仍可能含私有数据。
+- Selenium Grid 启动不再清理其他会话，显式清理只接受明确拥有的 session ID。
+- 修复 MCP 1.2.0 缺少 remove_tool 导致 device 模式无法启动，增加最低/最新 SDK 的真实 stdio 发布检查。
+- 公共与六端中文需求、迁移说明、共享操作 Skill 和回归测试同步更新。
 
-## 桌面应用
+## 升级与迁移
 
-- 增加首次欢迎流程、Windows/macOS 自动连接本机、应用清单和整机操作。
-- 仅在任务需要时观察浏览器，恢复后保留资源选择；任务占用期间暂停自动改绑。
-- 改善模型设置、Token 遮罩/管理和连接错误。整机任务时最小化，结束或人工接管时恢复。
-- 打包包含 Windows runner 资源，在目标系统生成原生归档，仍为未签名测试版。
-
-## 升级与组件版本
+Python 包、托管安装器、native host、客户端插件和桌面产物使用 0.4.17。浏览器扩展文件未变，保持 0.4.13；协议和 ID 不变，不要求重载或断开现有扩展。
 
 ```sh
 pipx upgrade saygo-agent-control
 ```
 
-重启 Agent 加载新代码，包安装保留 pipx 解释器。已有 host 持续运行，直到用户重连才加载新代码，不主动断开。桌面用户手动下载匹配的 SaygoDesktop-0.4.16-*（Windows x64、macOS arm64、Linux x86_64）。
+升级后重启 Agent 客户端以加载新的 MCP 参数。桌面用户下载匹配系统的 `SaygoDesktop-0.4.17-*`。已有在线 host 保持运行，用户后续重连才加载新 host。
 
-Python 包、托管安装器与新构建 host 为 0.4.16。扩展仍为 0.4.13，协议和 ID 不变，文件未变所以不重新上传。0.4.15 曾撤回，不复用。
+- 旧输入脚本必须先截图并读取画面，再携带 `--observation-id`；推荐同时保存 `--request-id`。同 ID 的重查必须保留原参数，新动作使用新观察和新 ID。
+- 未知结果先查 `device operations` 并观察，再用 `device resolve --session NAME --request-id ID --resolution applied --note '已核对结果'`；确认未生效用 `not_applied`。核对不会重放输入。
+- macOS 旧前台绑定缺少窗口 ID 时须重新连接；窗口失效时显式指定新的 `--window-id`。不能用其他窗口悄悄接替旧目标。
+- 移动 QA 须配置明确的 `APPIUM_DEVICE`。按旧手指方向理解 scroll_up/down 的调用方需调整；QA 的人工核对不等同恢复原模型循环。
 
-## 验证边界
+## 验证与限制
 
-回归覆盖真实 host 子进程与模拟扩展对端、共享目录发现、同版本修复、Windows 文件共享异常。隔离真实 Chrome 测试启动两个独立 MCP 服务，检查页面、实际 PNG 和重启后的输入结果；发布门槛另运行 CLI Playwright。
+修复阶段已完成 948 项离线通过、15 项环境跳过，以及 Linux 无头真实扩展 3 项、CLI Playwright 1 项通过。发布另检查完整依赖下的回归、真实有界浏览器、Linux/Windows/macOS 干净 wheel 安装与重复 setup，以及三平台原生桌面冻结程序与归档。
 
-PyPI 发布前检查 Linux/Windows/macOS 的干净 wheel 安装与重复 setup；桌面执行 Qt 和冻结包启动检查。这些不代表所有系统的完整 GUI 任务通过，不包含 Android/iOS 硬件验收。
-
-## 历史发布核对：2026-10-12
-
-- [PyPI 与三平台安装工作流](https://github.com/WilliamSkyWalker/saygo/actions/runs/38209220447)通过；wheel/sdist 可见且未撤回，标准 pip 下载成功，关键桥接/更新代码与标签逐字节一致。
-- [GitHub 0.4.16](https://github.com/WilliamSkyWalker/saygo/releases/tag/v0.4.16)公开，源码、安装器、扩展/元数据及三个桌面归档/摘要共 12 个附件齐全。
-- [桌面构建](https://github.com/WilliamSkyWalker/saygo/actions/runs/38208607638)使用匹配标签提交；[产物发布](https://github.com/WilliamSkyWalker/saygo/actions/runs/38209742540)再次核对来源及三个摘要。
-- 商店查询确认扩展 0.4.13 已发布，跳过重复上传/提交；未重载用户扩展。
-
-上述为记录当时的核对，详细结果与归档摘要见[0.4.16 验收](history/release-0.4.16.md)。
+四端真机、完整真实模型业务任务、桌面签名和公证不在通过范围内。发布、安装、构建和商店状态以[本版验证记录](history/release-0.4.17.md)的实际结果为准；不将源码修复描述为六端全部可用。

@@ -43,7 +43,7 @@ Gherkin 支持 Feature/Background/Scenario/Scenario Outline/Examples 及中文�
 
 文件头使用 saygo-target/platform/package/reset-default 元数据，值后不写行内注释。Markdown 用例以 `### TC-XXX` 分块，使用 Priority/Reset before/Platform/Mode/Steps 字段。
 
-私有目标放在 tests/目标/，公开 *_demo 与 _template 是例外。cases 存用例，_preconditions.md 提供恢复到前置态的说明，_accounts.json 提供账号池，reports 保存报告。真实账号用私有配置，公开用例使用 `${EMAIL}`、`${PASSWORD}` 等占位符；多设备按 worker 索引选择账号。当前账号不足会回退首账号，不能保证独占，见 [QA-019](requirements.md#qa)。
+私有目标放在 tests/目标/，公开 *_demo 与 _template 是例外。cases 存用例，_preconditions.md 提供恢复到前置态的说明，_accounts.json 提供账号池，reports 保存报告。真实账号用私有配置，公开用例使用 `${EMAIL}`、`${PASSWORD}` 等占位符；多设备按 worker 索引选择账号。非空账号池不足时在启动前报错，不再复用首账号；无账号的用例可以不配置账号池。账号是否实际相同仍需由配置者保证，见 [QA-019](requirements.md#qa)。
 
 Selenium Grid 启动清理目前会遍历并删除服务器列出的已有会话，尚无本次任务所有权过滤；共享 Grid 场景不能宣称已隔离，见 [QA-022](requirements.md#qa)。QA 直接调用驱动的保护范围也不等同于 device/task，细项见[代码核对记录](requirements-audit.md)。
 
@@ -62,6 +62,10 @@ pass/fail 需至少 15 字符并引用屏幕元素的证据，fail 还需至少 
 healer 只追加根因分类与建议，不修复应用、不修改原判定。失败后离开页面再异步补判的方案已否决。
 
 ## 模型、定位与性能
+
+QA 通过 `qa/control.py` 使用共享观察检查、物理资源锁和持久输入日志。手机须配置 `APPIUM_DEVICE`；用例执行期间拒绝其他 Saygo 入口抢用相同设备。输入异常且是否生效未知时立即停止该设备的后续用例，结果保留 `needs_review`、当前截图和请求记录；不得自动重发。按[普通设备核对协议](operations.md)处理后，可重新开始明确的任务，不自动恢复旧模型循环。
+
+并发 Grid 不再启动即清理整个 Grid；只释放本 Agent 创建的会话。报告、截图和动作日志可能含账号内容；QA 文本日志会过滤已配置的账号值，这不等于所有产物均已脱敏。
 
 LLM_MODEL_BRAIN/PLANNER 留空回落 LLM_MODEL；LLM_MODEL_LOCATOR 留空关闭定位，定位端点/密钥可复用主模型。普通 tap/long_press 有 target 时定位成功可替换坐标，失败沿用原坐标；旧 no_effect 像素差重试路径已停用。
 

@@ -38,21 +38,37 @@ MCP 的 `device_observe`、含后续观察的 `device_act`，以及任务 observ
 
 观察包含唯一 ID、时间、会话、目标、图像尺寸、屏幕尺寸与坐标映射。支持 `screen`、`percent`、`image`、`crop`；后两种必须引用来源观察。`crop` 使用图像像素矩形 `[left,top,right,bottom]`，返回放大两倍的图像并保留映射。Retina 和缩放截图像素不等于设备逻辑像素；使用服务转换，不手动猜倍率。
 
-动作词汇包括 `tap/swipe/input/press_key/open_url/open_app/scroll_up/scroll_down`；`double_click/right_click/hover/hotkey/long_press/scroll_at` 取决于后端和运行模式。`swipe` 在鼠标后端表示拖动，`hotkey` 用 `keys: ["ctrl","a"]`，长按 `duration` 单位为秒。各端真实支持清单见[需求总索引](requirements.md#需求总索引)。当前通用能力表把 open_url/open_app 都放入基础集合，但手机不具通用 URL 导航、浏览器不具本机应用启动能力；这是尚未修复的能力声明缺口。
+动作词汇包括 `tap/swipe/input/press_key/open_url/open_app/scroll_up/scroll_down`；`double_click/right_click/hover/hotkey/long_press/scroll_at` 取决于后端和运行模式。`swipe` 在鼠标后端表示拖动，`hotkey` 用 `keys: ["ctrl","a"]`，长按 `duration` 单位为秒。各端真实支持清单见[需求总索引](requirements.md#需求总索引)。能力表按端区分：浏览器公布 open_url，手机公布 open_app；不支持的动作在派发前拒绝。
 
-传统命令 `tap/input/key/scroll/open` 仍可用；其中直接点击使用逻辑坐标。`open` 对浏览器表示 URL，对手机/桌面表示应用。优先使用带观察 ID 的动作协议。先查询能力，再使用可见按钮或菜单；后台不支持的快捷键不能自动改为前台执行。
+传统命令 `tap/input/key/scroll/open` 仍可用；其中直接点击使用逻辑坐标。`open` 对浏览器表示 URL，对手机/桌面表示应用。所有输入命令都必须带 `--observation-id`，并推荐使用 `--request-id` 保存调用身份。先查询能力，再使用可见按钮或菜单；后台不支持的快捷键不能自动改为前台执行。
 
 ## 观察有效性与滚动
 
-带来源观察的动作拒绝超过 30 秒的观察。派发前核对目标身份、URL、尺寸、窗口 ID、进程及边界，并比较解码后的像素变化。远离目标的细微变化可以容忍；点击附近变化须重新观察。task 强制使用最新观察；旧设备命令以及不传 observation_id 的 act 没有同等的来源观察保护。像素阈值是启发式保护，不能证明业务目标未变，也不能阻止人或其他软件在输入期间抢焦点。
+带来源观察的动作拒绝超过 30 秒的观察。派发前核对目标身份、URL、尺寸、窗口 ID、进程及边界，并比较解码后的像素变化。远离目标的细微变化可以容忍；点击附近变化须重新观察。task 强制使用最新观察；普通 device（包括旧输入命令）也要求来源观察，并拒绝早于上次输入或人工核对的观察。像素阈值是启发式保护，不能证明业务目标未变，也不能阻止人或其他软件在输入期间抢焦点。
 
 滚动先定位正确区域：未知区域先约半屏校准；连续浏览可用可见高度的 85–90%，保留 1–2 行重叠；接近目标或末尾减至 10–20%。每次滚动都读取新截图、对比可见标志物再决定下一步。没有移动时先检查区域、加载和边界，不能盲目加大或重放。
 
-浏览器 `scroll_at` 每单位请求 100 CSS 像素，允许小数；正数向上、负数向下。其他后端可能是滚轮刻度或原生步进。移动端 scroll_up/down 当前按手指上滑/下滑命名，与桌面滚轮方向不同，先观察实际内容移动。半屏、重叠和小步接近是操作指导，驱动不会自动按该比例滚动。桌面模型会收到前次滚动截图与当前图像，自行决定下一次幅度。
+浏览器 `scroll_at` 每单位请求 100 CSS 像素，允许小数；正数向上、负数向下。其他后端可能是滚轮刻度或原生步进。所有端的 scroll_up/down 统一表示视口朝内容顶部/底部移动；移动端分别用手指向下/向上滑动。旧脚本若按手指方向理解名称，需要调整。半屏、重叠和小步接近是操作指导，驱动不会自动按该比例滚动。桌面模型会收到前次滚动截图与当前图像，自行决定下一次幅度。
 
 `wait` 支持 `stable/change`；超时返回 `condition_met: false, timed_out: true`，截图本身仍受后端 I/O 超时限制。画面稳定、`dispatched: true` 或 `business_success: null` 都不能作为业务完成证明，必须核验结果。
 
+## 普通设备请求与核对
+
+普通设备请求也有持久去重和核对入口：
+
+```sh
+saygo device screenshot --session web
+saygo device input '测试文字' --session web --observation-id OBSERVATION_ID --request-id input-001
+saygo device operations --session web
+# 先观察并核对结果，再明确记录是否已生效；核对不会重放输入。
+saygo device resolve --session web --request-id input-001 --resolution applied --note '已核对画面'
+```
+
+`resolve` 仅用于结果不确定的请求，确认未生效时使用 `not_applied`。核对后旧观察失效。MCP 使用 `device_command(command="operations", session=...)` 查询；核对用 `command="resolve"`，在 `options` 中传 `request_id/resolution/note`。调用方重查丢失回执时须保持原请求 ID、会话和全部有效参数；同 ID 异参会被拒绝。未传请求 ID 时服务生成 ID，不能因此把新调用当作安全重试。
+
 ## 跨端交互任务
+
+命名 task 另提供跨步骤恢复、接管和证据导出：
 
 ```sh
 saygo resources bind phone phone
@@ -75,7 +91,7 @@ saygo task export TASK_ID --out evidence.zip
 
 派发输入前持久记录动作意图，同一请求 ID 不能派发两次。回执丢失不能触发自动重放；输入是否发生不明时进入 `needs_review`。观察实际结果后执行 `resolve --outcome completed|not_executed --note ...`；两种结果都会使旧观察失效，新输入必须重新观察并明确提交。
 
-这里的去重保证属于 task/Runtime；普通 device 的操作日志不提供相同的 request ID 去重。Appium 文字输入目前仍有异常后切换输入方法的后备分支，可能在驱动内部重复输入，已列为 [OBS-021 缺口](requirements.md#obs)，不能以 Runtime 外层不重试掩盖该限制。
+Appium 输入异常不再切换输入方法重发；device 与 QA 使用独立于 task 的持久请求记录，同样保留结果不确定时的资源归属。普通请求的核对参数与 task 不同，见下节。
 
 `idle` 且带错误可能表示派发前拒绝，应查事件。已确认输入后的截图失败单独记入 `evidence.error`，不能因此重复输入。任务在空闲、接管或待核对期间仍持有资源，普通 device 命令与其他任务会报告占用。使用所属任务接口；`task list` 查未结束任务，finish 或显式 `cancel --note ...` 释放资源。
 

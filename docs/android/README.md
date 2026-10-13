@@ -4,7 +4,7 @@
 
 ## 需求与前提
 
-公共归属为 MOBILE、SESSION、OBS、TASK；本端全部细项见 [AND 需求清单](requirements.md)。视觉截图、触摸和输入使用 Appium + UiAutomator2；adb 用于发现和生命周期。MJPEG 无帧或解码失败时回落 Appium 截图，但目前缺少帧龄检查，断流后可能继续返回缓存帧，不能把“始终新鲜”写成已实现保证。
+公共归属为 MOBILE、SESSION、OBS、TASK；本端全部细项见 [AND 需求清单](requirements.md)。视觉截图、触摸和输入使用 Appium + UiAutomator2；adb 用于发现和生命周期。MJPEG 帧超过 0.5 秒、无帧或解码失败时回落 Appium 截图；断流和停止立即清缓存。帧龄只约束采集缓存，不证明业务状态。
 
 真机需开启 USB 调试、确认信任并解锁；Saygo 不绕过设备权限。连接现有手机不会默认清空数据或启动应用。Python 依赖选择 `mobile`；Appium 服务器还需完整 Android SDK，只有 platform-tools 的引导安装不等于 SDK 齐全。
 

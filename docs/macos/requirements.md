@@ -2,7 +2,7 @@
 
 [操作指南](README.md) · [公共需求与总索引](../common/requirements.md) · [代码核对记录](../common/requirements-audit.md)
 
-核对日期：2026-10-12。以下按当前工作区代码整理，每条均给出入口或实现位置。已有实现不代表本次真机验收通过；缺口保留应达到的需求，并说明代码尚未满足的部分。
+初始核对日期：2026-10-12；本次修复状态更新：2026-10-13。以下按当前工作区代码整理，每条均给出入口或实现位置。已有实现不代表本次真机验收通过；缺口保留应达到的需求，并说明代码尚未满足的部分。
 
 范围包含 macOS 前台窗口、原生整机和实验性原生后台控制。后台是应用内的原生控件动作与定向键盘输入，不能当作任意应用都支持的后台鼠标。
 
@@ -27,7 +27,7 @@
 | MAC-001 | 发现当前桌面的应用窗口，返回应用名、标题、PID、窗口 ID 和边界，供显式选择。 | 连接.desktop_windows | 已有实现 |
 | MAC-002 | 本地控制要求 macOS 和所需 PyObjC/Quartz 依赖；屏幕录制、辅助功能权限授予实际运行进程，缺权限要说明。 | 前台.setup；后台.setup/validate_action；整机.setup | 已有实现；前台部分错误由系统接口返回 |
 | MAC-003 | 前台窗口连接按应用名打开/激活应用并等候窗口，超时明确失败；不能宣称此模式不影响用户焦点。 | 前台.setup/_open_app | 已有实现 |
-| MAC-004 | 前台命名会话重连应保持明确窗口与进程；当前按应用名重新取最大窗口，不能声称跨进程窗口身份固定。 | 前台._find_window；会话.attach_desktop | 缺口：前台多窗口/重启可能重新选窗 |
+| MAC-004 | 前台命名会话重连保持明确窗口 ID 和进程 PID；多窗口必须选择，原窗口消失、ID 被其他进程复用或旧绑定无窗口 ID 时拒绝。 | 前台._find_window；会话.attach_desktop | 已修复；离线测试通过，macOS 前台真机待验收 |
 | MAC-005 | 后台连接只绑定已打开且位于当前桌面的窗口，禁止启动、激活或恢复最小化应用。 | 后台.setup/_windows/_ensure_frontmost | 已有实现 |
 | MAC-006 | 后台多候选要求 `--window-id`，保存后台标志、PID、窗口 ID；重连找不到原窗口必须报错。 | 连接._connect；后台._find_window/connection | 已有实现 |
 | MAC-007 | 整机模式仅原生 macOS，不能与 app/background 混合；与窗口模式使用不同会话。 | 连接._connect；整机.setup | 已有实现 |
@@ -38,7 +38,7 @@
 | 编号 | 需求与验收条件 | 入口或代码位置 | 当前状态 |
 | --- | --- | --- | --- |
 | MAC-009 | 窗口截图包含真实图像尺寸、逻辑点尺寸和比例，Retina 与多屏负坐标经映射处理。 | 前台.screenshot_raw/scale/_to_global | 已有实现；多显示器组合待验收 |
-| MAC-010 | 前台截图可能激活应用；每次刷新窗口边界，输入前比较窗口 ID、PID、边界和前台窗口。 | 前台._validate_window/screenshot_raw | 已有实现；不补足重连选窗缺口 |
+| MAC-010 | 前台截图可能激活应用；每次刷新窗口边界，输入前比较窗口 ID、PID、边界和前台窗口。 | 前台._validate_window/screenshot_raw | 已有实现；重连另按保存的 PID/窗口核对 |
 | MAC-011 | 后台截图不激活目标；缺屏幕录制权限、锁屏、不活跃控制台、最小化/非当前桌面时报错。 | 后台.screenshot_raw/_require_unlocked/_windows | 已有实现 |
 | MAC-012 | 后台原生控件必须能唯一映射到已观察窗口；同边界的多个原生窗口、错进程或错窗口拒绝。 | 后台._check_native_window | 已有实现 |
 | MAC-013 | 整机截图覆盖活动显示器联合区域，前台应用/窗口或显示布局变化使旧观察失效。 | 整机._bounds/observation_metadata/screenshot_raw | 已有实现；真实组合待验收 |
@@ -84,6 +84,8 @@
 
 ## 验收范围
 
-现有入口：[后台契约测试](../../tests/control_demo/test_mac_background.py)、[原生面板实测](../../tests/mac_demo/test_background_live.py)、[桌面产品测试](../../tests/desktop_demo/)。历史 Intel Mac 原生面板点击、输入、滚动及 CLI/MCP 实测范围见[操作指南](README.md#验收)；arm64 冻结包见[0.4.16](../common/history/release-0.4.16.md)。前台固定窗口恢复缺口不能因后台面板通过而标为完成。
+现有入口：[后台契约测试](../../tests/control_demo/test_mac_background.py)、[原生面板实测](../../tests/mac_demo/test_background_live.py)、[桌面产品测试](../../tests/desktop_demo/)。历史 Intel Mac 原生面板点击、输入、滚动及 CLI/MCP 实测范围见[操作指南](README.md#验收)；arm64 冻结包见[0.4.16](../common/history/release-0.4.16.md)。本轮前台固定窗口恢复通过模拟窗口列表验证；后台面板的历史结果不代替前台真机验收。
 
 本次只核对源码和文档，不操作现有业务会话。完整验收必须记录环境、连接模式、命令、前后截图、输入结果、断连恢复和未通过项；存在代码的动作也必须在目标设备或应用上单独核验。
+
+本轮源码修复与迁移、六端分别验证的范围见[修复记录](../common/requirements-audit.md#升级与兼容性)。未更新用户安装或发布版本。

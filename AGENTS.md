@@ -13,7 +13,7 @@
 
 ## 提交说明必须完整
 
-禁止给包含多项行为修改的提交只写一句标题。提交正文使用中文，至少说明：
+禁止给包含多项行为修改的提交只写一句标题。commit 标题和正文使用英语，至少说明：
 
 1. **问题与目的**：用户在什么条件下遇到什么问题，本次要改善什么行为。
 2. **全部修改点**：按模块或文件列出实际修改，逐项解释为什么改；包括接口、状态、错误处理、界面、打包、文档和测试。不得只写“优化”“完善”“修复若干问题”。
@@ -26,20 +26,20 @@
 示例结构：
 
 ```text
-fix(browser): 统一桌面版和 WSL 的浏览器桥接发现
+fix(browser): share browser bridge discovery across desktop and WSL
 
-问题与目的：
-- 说明触发条件、故障及修复后的行为。
+Problem and purpose:
+- Describe the trigger, failure and intended behavior.
 
-修改点及目的：
-- 路径/模块：具体修改；解决的具体问题。
-- 测试/文档/打包：具体增补；覆盖的风险或使用方式。
+Changes:
+- Explain each module change and the problem it addresses.
+- Include tests, documentation and packaging changes with their purpose.
 
-验证：
-- 平台、命令、实际结果，以及使用真实设备还是模拟依赖。
+Validation:
+- Record platforms, commands, actual results and real-device versus simulated coverage.
 
-兼容性与限制：
-- 迁移策略、实际验证范围、尚未发布或未实测的部分。
+Compatibility and limitations:
+- Describe migration, verified scope, unpublished artifacts and untested paths.
 ```
 
 ## 浏览器连接与升级
@@ -90,7 +90,7 @@ Saygo 为外部编程 Agent 提供跨手机、浏览器和桌面窗口的视觉�
 - `observe_after`、有超时的变化/稳定等待只返回观察事实；`business_success: null` 不能改写成业务成功。能力缺失、输入异常必须明确报错。
 - 优先可见按钮和菜单，尽量不用快捷键。Windows 后台不支持的快捷键不得静默切换前台；前台操作必须显式选择。
 - 手机、浏览器和桌面均支持 handoff/resume。暂停阻止自动操作，交还控制权后截图，业务完成仍须另行验证。显式 workflow 的 human 步还要执行声明的验证步骤。
-- 任务/工作流在 idle、handoff、needs_review 期间保留资源归属；普通 device 命令遵守这套锁。所有本地桌面窗口共享前台输入资源。锁不能阻止人或其他软件改变焦点。QA 路径的锁覆盖不要未经核对就声称等同于共享 device 服务。
+- 任务/工作流在 idle、handoff、needs_review 期间保留资源归属；普通 device 命令遵守这套锁。所有本地桌面窗口共享前台输入资源。锁不能阻止人或其他软件改变焦点。QA 经 `qa/control.py` 复用物理资源锁、观察检查与持久请求记录；模拟测试不等于真机验收，也不等于 task 的完整接管恢复生命周期。
 - 实际操作、异常、前后截图和接管事件由程序记录；Agent 解释单独存为 annotation。导出包可能包含应用数据、输入文本和截图。
 - 默认状态在 `$SAYGO_HOME_DIR`（`~/.saygo`），交互 task 在其 `runtime` 子目录；显式 workflow 默认使用当前目录的 `.saygo_runs/runtime`。`SAYGO_RUNTIME_DIR` 可覆盖两者的任务库，workflow 的 `--state-dir` 优先。CLI/MCP 要共享相同配置。项目资源别名在 `.saygo/resources.json`。
 
@@ -148,7 +148,7 @@ Saygo 为外部编程 Agent 提供跨手机、浏览器和桌面窗口的视觉�
 
 - `base.py` 抽象接口(screenshot/tap/swipe/input_text/press_key/is_ime_visible…)。
 - `appium.py` **iOS+Android 统一驱动**：`AppiumServerManager` 自动起 server(带 ANDROID_HOME、锁定装了 appium 的 node)；os 由 `config["appium"]["os"]` 选 xcuitest/uiautomator2。`create_platform("ios"/"android"/"appium")` 全 → AppiumPlatform。
-- **mjpeg 帧流截图**(`platforms/mjpeg.py`，默认开)：起 session 时开 driver `mjpegServerPort`，`screenshot_raw` 从常驻流取缓存帧(JPEG→PNG)省 HTTP 往返；没有帧或解码失败时回落 `get_screenshot_as_png`。当前未校验帧龄，断流可能继续返回旧帧；普通 device 重连也没有自动恢复帧流，详见需求 OBS-020。`APPIUM_MJPEG_*` 控。
+- **mjpeg 帧流截图**(`platforms/mjpeg.py`，默认开)：起 session 时开 driver `mjpegServerPort`，`screenshot_raw` 从常驻流取缓存帧(JPEG→PNG)省 HTTP 往返；没有帧或解码失败时回落 `get_screenshot_as_png`。帧龄超过 0.5 秒回落 Appium，断流和停止清缓存；普通 device 重连没有自动恢复帧流，详见需求 OBS-020。`APPIUM_MJPEG_*` 控。
 - `browser.py` 保留 Selenium QA/local/Grid。CLI/显式 Runtime 的 managed browser 使用 `browser_playwright.py`，CDP 接入常驻 Chromium，按 target ID 绑定页面；关闭控制器只断开，不关 Chrome。CLI `device start --backend playwright`、`pages/select-page/close-page`；详见 `docs/playwright/README.md`。测试 `tests/browser_demo`（真实浏览器测试需 `SAYGO_TEST_CHROME`）。
 - 桌面：`desktop_mac.py` / `desktop_win.py` 是前台窗口级驱动；Windows `--background` 使用 PowerShell/Win32 runner，支持范围取决于控件，不支持操作必须报错。WSL 显式选 `PLATFORM=windows`，由 `windows_runner.py` + PowerShell/Win32 runner 操作宿主。`PLATFORM=desktop` 仅在原生 Windows 选 Windows 驱动，其余系统选 macOS。桌面通过环境变量配置；`run --platform` 当前只接受 ios/android/browser/rdp。
 - `rdp.py` 为实验性远程 Windows 驱动，尚不应视为稳定接口。
