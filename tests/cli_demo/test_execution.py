@@ -6,6 +6,59 @@ from saygo.qa import execution
 
 
 class ExecutionTests(unittest.TestCase):
+    def test_uncertain_case_retains_evidence_and_prevents_following_case_input(self):
+        from saygo.platforms.base import ActionOutcomeUnknown
+        for mode in ('sequential', 'grid', 'devices'):
+            for during_prepare in (False, True):
+                with self.subTest(mode=mode, during_prepare=during_prepare):
+                    agent = self.agent({'platform': 'android'})
+                    operation = {'request_id': 'example-request', 'record': 'example.jsonl'}
+                    agent.platform.last_operation = operation
+                    agent.run.return_value = {'result': 'error', 'needs_review': True,
+                                              'operation': operation, 'steps_detail': [{'action': 'tap'}]}
+                    with patch.object(execution, '_create_agent', return_value=agent), \
+                         patch.object(execution, '_check_or_reconnect_device', return_value=True), \
+                         patch.object(execution, '_maybe_heal'), \
+                         patch.object(execution, '_prepare_browser_case'), \
+                         patch.object(execution, '_prepare_android_case',
+                                      side_effect=ActionOutcomeUnknown('response lost') if during_prepare else None) as prepare:
+                        if mode == 'sequential':
+                            results = execution._run_sequential({'platform': 'android'}, ['first', 'second'], None)
+                        elif mode == 'grid':
+                            if during_prepare:
+                                continue  # Grid has its own browser preparation below.
+                            results = execution._run_concurrent({'platform': 'android'}, ['first', 'second'], None, 1)
+                        else:
+                            results = execution._run_dispatched_devices({'platform': 'android'}, ['first', 'second'],
+                                                                       ['device-a'], [], None)
+                    self.assertTrue(results[0]['needs_review'])
+                    self.assertEqual(results[0]['operation'], operation)
+                    self.assertEqual(results[1]['result'], 'skipped')
+                    self.assertTrue(results[1]['needs_review'])
+                    self.assertEqual(agent.run.call_count, 0 if during_prepare else 1)
+                    if mode != 'grid':
+                        prepare.assert_called_once()
+
+    def test_short_account_pool_rejected_before_any_device_is_started(self):
+        with patch.object(execution, '_create_agent', side_effect=AssertionError('must not start')) as create:
+            with self.assertRaisesRegex(ValueError, 'account|账号'):
+                execution._run_dispatched_devices({'platform': 'android'}, ['Example'],
+                    ['device-a', 'device-b'], [{'email': 'example@example.test'}], None)
+        create.assert_not_called()
+
+    def test_account_values_and_substituted_case_are_not_in_scheduler_log(self):
+        account = {'email': 'example@example.test', 'token': 'example-token',
+                   'custom_field': 'example-private-value', 'password': 'example-password'}
+        agent = self.agent({'platform': 'android'})
+        with patch.object(execution, '_create_agent', return_value=agent), \
+             patch.object(execution, '_check_or_reconnect_device', return_value=True), \
+             patch.object(execution, '_reset_android_state'), \
+             self.assertLogs('saygo.qa.execution', level='INFO') as logs:
+            execution._run_dispatched_devices({'platform': 'android'}, ['Run ${EMAIL}'],
+                                             ['device-a'], [account], None)
+        for value in account.values():
+            self.assertNotIn(value, '\n'.join(logs.output))
+
     def agent(self, config):
         agent = Mock()
         agent.platform.platform_name = config['platform']

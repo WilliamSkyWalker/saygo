@@ -19,12 +19,49 @@ Usage:
 import contextvars
 import logging
 import sys
+from contextlib import contextmanager
 
 # Per-thread context label (e.g. "W1/c40"). Lives in contextvars so each
 # worker thread can set independently without polluting sibling threads.
 _case_ctx: contextvars.ContextVar[str] = contextvars.ContextVar(
     "saygo_case_ctx", default=""
 )
+_redactions = contextvars.ContextVar('saygo_redactions', default=())
+
+
+@contextmanager
+def redact_values(value):
+    """Do not print configured account values, including custom fields and nested tokens."""
+    def strings(item):
+        if isinstance(item, str) and item:
+            yield item
+        elif isinstance(item, dict):
+            for child in item.values():
+                yield from strings(child)
+        elif isinstance(item, (list, tuple)):
+            for child in item:
+                yield from strings(child)
+    values = tuple(sorted(set(_redactions.get()) | set(strings(value)), key=len, reverse=True))
+    token = _redactions.set(values)
+    try:
+        yield
+    finally:
+        _redactions.reset(token)
+
+
+class _RedactionFilter(logging.Filter):
+    def filter(self, record):
+        values = _redactions.get()
+        if values:
+            message = record.getMessage()
+            exception = logging.Formatter().formatException(record.exc_info) if record.exc_info else record.exc_text
+            for value in values:
+                message = message.replace(value, '[REDACTED]')
+                if exception:
+                    exception = exception.replace(value, '[REDACTED]')
+            record.msg, record.args = message, ()
+            record.exc_text, record.exc_info = exception, None
+        return True
 
 
 def set_case_context(label: str) -> None:
@@ -55,6 +92,8 @@ logging.getLogger("saygo").setLevel(logging.INFO)
 def get_logger(name: str) -> logging.Logger:
     """Get a named logger under the 'saygo' namespace."""
     logger = logging.getLogger(f"saygo.{name}")
+    if not any(isinstance(item, _RedactionFilter) for item in logger.filters):
+        logger.addFilter(_RedactionFilter())
     if not logger.handlers:
         handler = logging.StreamHandler(sys.stderr) if sys.stderr is not None else logging.NullHandler()
         handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=DATE_FORMAT))

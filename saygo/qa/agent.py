@@ -29,9 +29,12 @@ from PIL import Image
 
 from saygo.qa.brain import Brain
 from saygo.vision.locator import ElementLocator
-from saygo.logger import get_logger
+from saygo.logger import get_logger, redact_values
 from saygo.qa.planner import plan_scenario
 from saygo.platforms import create_platform
+from saygo.platforms.base import ActionOutcomeUnknown
+from saygo.qa.control import QAPlatform, resource_keys
+from saygo.runtime.locking import resource_guard
 from saygo.probes import MAX_ATTEMPTS_PER_STEP, MIN_POLL_INTERVAL_S, ProbeContext, ProbeRunner, ProbeSpec, summarize_data
 from saygo.probes.spec import parse_directive_line
 from saygo.vision.settle import wait_settled, sample_then_frames
@@ -39,8 +42,6 @@ from saygo.skills import SkillContext, create_pipeline, run_pipeline
 from saygo.qa.step_validator import validate_step_progress, validate_assertion_batch
 
 log = get_logger("agent")
-
-ACTION_MAX_RETRIES = 2
 
 # Max LLM sub-actions per Gherkin step before we force a step timeout.
 # -1 = 禁用该上限（不按 sub-action 次数掐断 step）。禁用后由外层 self.max_steps 兜底防失控，
@@ -175,10 +176,13 @@ class Agent:
 
         platform_name = cfg.get("platform", "ios")
         log.info("创建平台: %s", platform_name)
+        keys = resource_keys(cfg)
         self.platform = create_platform(platform_name, cfg)
         log.info("平台已创建, 开始 setup...")
 
-        self.platform.setup(cfg)
+        with resource_guard(keys):
+            self.platform.setup(cfg)
+        self.platform = QAPlatform(self.platform, keys)
         log.info("平台 setup 完成")
 
         # MCP client registry — 若 .saygo/mcp_clients.json 存在则加载。文件含 token
@@ -254,7 +258,26 @@ class Agent:
         log.info("Agent.__init__ 完成")
 
     def run(self, test_case: str) -> dict:
+        with redact_values(self.probe_context.get('account', {})), self.platform.case_guard():
+            try:
+                return self._run(test_case)
+            except ActionOutcomeUnknown as exc:
+                evidence = dict(getattr(self, '_active_evidence', {}))
+                current = getattr(self, '_active_step', None)
+                details = evidence.setdefault('steps_detail', [])
+                if current is not None and not any(item is current for item in details):
+                    current['error'] = str(exc)
+                    details.append(current)
+                return {**evidence, 'result': 'error', 'reason': str(exc), 'needs_review': True,
+                        'qa_session': self.platform.session, 'steps': len(evidence.get('steps_detail', [])),
+                        'duration': time.time() - self._active_started, 'business_success': None,
+                        'operation': self.platform.last_operation}
+
+    def _run(self, test_case: str) -> dict:
         """Execute a test case with step-driven loop + validator gating."""
+        self._active_started = time.time()
+        self._active_evidence = {}
+        self._active_step = None
         self.brain.reset()
         log.info("=" * 60)
         log.info("测试用例: %s", test_case)
@@ -311,6 +334,8 @@ class Agent:
         retry_feedback = ""                 # validator reject 时塞给下一次 decide
 
         steps_detail: list[dict] = []
+        self._active_evidence = {'steps_detail': steps_detail, 'scenario_steps': scenario_steps,
+                                 'step_status': step_status}
         start_time = time.time()
         prev_raw_image = None
         prev_ime_visible = False  # 上一回合软键盘是否可见（检测 tap 是否唤起键盘=聚焦输入框）
@@ -368,6 +393,7 @@ class Agent:
                 "step_progress": None,
                 "rejected": False, "reject_reason": "",
             }
+            self._active_step = step_record
 
             # ── 0. 连续无推进上限（主收敛：到达即 fail；推进到下一 step 会重置计数）──
             if turns_without_progress >= MAX_TURNS_WITHOUT_PROGRESS:
@@ -684,6 +710,8 @@ class Agent:
                                  turn, target_desc, gx, gy)
                         try:
                             self.platform.execute_action(ground_action)
+                        except ActionOutcomeUnknown:
+                            raise
                         except Exception as e:
                             log.warning("[Turn %d] 元素定位重点击执行失败: %s", turn, e)
                         # 记为一次外部动作（保持 brain history 不变式 + 让下轮 LLM 知道已重定位）
@@ -898,16 +926,12 @@ class Agent:
                              turn, action["target"], _coord[0], _coord[1])
             log.info("[Turn %d] 执行动作: %s", turn, action)
             last_err = None
-            for attempt in range(1, ACTION_MAX_RETRIES + 1):
-                try:
-                    self.platform.execute_action(action)
-                    last_err = None
-                    break
-                except Exception as e:
-                    last_err = e
-                    log.warning("[Turn %d] 执行失败 (第%d次): %s", turn, attempt, e)
-                    if attempt < ACTION_MAX_RETRIES:
-                        time.sleep(0.5)
+            try:
+                self.platform.execute_action(action)
+            except ActionOutcomeUnknown:
+                raise
+            except Exception as e:
+                last_err = e
 
             if last_err:
                 log.error("[Turn %d] 执行最终失败: %s", turn, last_err)
@@ -1002,6 +1026,8 @@ class Agent:
                              turn, first_fail, act.get("target", ""))
                     try:
                         self.platform.execute_action(act)
+                    except ActionOutcomeUnknown:
+                        raise
                     except Exception as e:
                         log.warning("[Turn %d] 关弹窗执行失败: %s", turn, e)
                     self.brain.note_external_action(
@@ -1101,6 +1127,8 @@ class Agent:
             else:
                 # swipe(需自定义坐标)等 MVP 不在分层内直接处理 → 逃生大 LLM
                 return ("exec_fail", before_bytes, f"{note}(分层暂不支持 {atype},交大 LLM)")
+        except ActionOutcomeUnknown:
+            raise
         except Exception as e:
             return ("exec_fail", before_bytes, f"{note}(执行异常: {e})")
 

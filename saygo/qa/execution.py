@@ -4,7 +4,7 @@ import os
 import time
 from pathlib import Path
 
-from saygo.logger import get_logger
+from saygo.logger import get_logger, redact_values
 from saygo.qa.cases import (
     _apply_account_placeholders,
     _extract_reset_mode,
@@ -15,6 +15,7 @@ from saygo.qa.cases import (
     _substitute_placeholders,
 )
 from saygo.qa.device_setup import _check_or_reconnect_device, _reset_android_state
+from saygo.platforms.base import ActionOutcomeUnknown
 
 
 log = get_logger("qa.execution")
@@ -37,9 +38,25 @@ def _empty_result(status, reason, **metadata):
             "duration": 0, "steps_detail": [], **metadata}
 
 
+def _review_result(agent, exc):
+    agent._saygo_needs_review = True
+    return _empty_result('error', str(exc), needs_review=True, business_success=None,
+                         operation=agent.platform.last_operation,
+                         qa_session=agent.platform.session)
+
+
+def _paused_result(**metadata):
+    return _empty_result('skipped', 'Previous input needs review; remaining input was not dispatched',
+                         needs_review=True, business_success=None, **metadata)
+
+
 def _prepare_browser_case(platform, case, url):
     target = url or _extract_target_url(case)
     if not target:
+        return
+    if callable(getattr(type(platform), 'prepare_browser_case', None)):
+        platform.prepare_browser_case(target)
+        time.sleep(3)
         return
     try:
         driver = getattr(platform, "_driver", None)
@@ -120,10 +137,22 @@ def _run_sequential(cfg: dict, test_cases: list[str], url: str | None,
     agent.probe_context = _probe_run_context(target_dir, account)
     log.info("Agent 创建完成")
 
+    try:
+        with redact_values(account or {}):
+            return _run_sequential_cases(agent, cfg, test_cases, url, account)
+    finally:
+        agent.platform.teardown()
+
+
+def _run_sequential_cases(agent, cfg, test_cases, url, account):
+
     results = []
     current_platform = cfg.get("platform", "")
     for i, raw_tc in enumerate(test_cases):
         tc = _apply_account_placeholders(raw_tc, account) if account else raw_tc
+        if getattr(agent, '_saygo_needs_review', False) is True:
+            results.append(_paused_result(case=tc))
+            continue
         # Platform tag mismatch → skip this case before running pm_clear etc
         skip_reason = _skip_reason(tc, current_platform)
         if skip_reason:
@@ -131,15 +160,16 @@ def _run_sequential(cfg: dict, test_cases: list[str], url: str | None,
             results.append(_empty_result('skipped', skip_reason, case=tc))
             continue
 
-        _prepare_browser_case(agent.platform, tc, url)
-
-        # Android per-case state reset via `**Reset before**: <mode>` directive.
-        _prepare_android_case(agent.platform, tc)
-
-        tc = _substitute_placeholders(tc)
-
-        log.info("[%d/%d] 开始执行: %s", i + 1, len(test_cases), tc[:60])
-        result = agent.run(tc)
+        try:
+            _prepare_browser_case(agent.platform, tc, url)
+            _prepare_android_case(agent.platform, tc)
+            tc = _substitute_placeholders(tc)
+            log.info("[%d/%d] 开始执行", i + 1, len(test_cases))
+            result = agent.run(tc)
+        except ActionOutcomeUnknown as exc:
+            result = _review_result(agent, exc)
+        if result.get('needs_review'):
+            agent._saygo_needs_review = True
         log.info("[%d/%d] 结果: %s", i + 1, len(test_cases), result.get("result", "?"))
         # fail/timeout/error → Healer 根因分析（失败不影响主流程）
         _maybe_heal(agent, tc, result)
@@ -171,6 +201,8 @@ def _run_dispatched_devices(cfg: dict, test_cases: list[str],
     from queue import Empty, Queue
 
     n = len(devices)
+    if accounts and len(accounts) < n:
+        raise ValueError(f"账号数量不足：{len(accounts)} 个账号对应 {n} 台设备；补齐后再运行")
 
     # Per-device cfg：复制顶层 cfg 后改 serial（避免 share 同一 dict 引起 race）
     per_device_cfg: list[dict] = []
@@ -191,10 +223,8 @@ def _run_dispatched_devices(cfg: dict, test_cases: list[str],
     failed_devices: list[tuple[str, str]] = []
     for i, c in enumerate(per_device_cfg):
         serial = devices[i]
-        acct = accounts[i] if i < len(accounts) else (accounts[0] if accounts else {})
-        log_safe = {k: v for k, v in acct.items()
-                    if "pass" not in k.lower() and "secret" not in k.lower()}
-        log.info("  Agent #%d device=%s account=%s", i + 1, serial, log_safe)
+        acct = accounts[i] if accounts else {}
+        log.info("  Agent #%d device=%s account_slot=%s", i + 1, serial, i + 1 if accounts else 'none')
         try:
             _agent = _create_agent(config=c)
             # 每台设备绑自己的账号 —— probe 按它区分同一时间窗里的多台设备数据
@@ -248,11 +278,8 @@ def _run_dispatched_devices(cfg: dict, test_cases: list[str],
 
         agent = agents[worker_idx]
         device = devices[worker_idx]
-        # 账号池小于设备数时尾部设备 fallback 用 accounts[0]
-        account = (accounts[worker_idx] if worker_idx < len(accounts)
-                   else (accounts[0] if accounts else None))
-        acct_email = account.get("email", "(no-account)") if account else "(no-account)"
-        log.info("[Worker %d device=%s account=%s] start", worker_idx, device, acct_email)
+        account = accounts[worker_idx]
+        log.info("[Worker %d device=%s] start", worker_idx, device)
 
         # 设备健康自愈状态：连续 N 次 health check 失败该 worker 退出，
         # 把剩余 case 让其他 worker 抢走。避免一台设备挂了拖死一摞 case。
@@ -317,12 +344,15 @@ def _run_dispatched_devices(cfg: dict, test_cases: list[str],
                 try:
                     _prepare_android_case(agent.platform, tc)
                 except Exception as e:
+                    from saygo.platforms.base import ActionOutcomeUnknown
+                    if isinstance(e, ActionOutcomeUnknown):
+                        raise
                     log.warning("[Worker %d] reset 失败: %s", worker_idx, e)
 
                 tc = _substitute_placeholders(tc)
 
-                log.info("[%d/%d Worker %d/%s] 执行: %s",
-                         n_done, total, worker_idx, device, tc[:60])
+                log.info("[%d/%d Worker %d/%s] 执行",
+                         n_done, total, worker_idx, device)
                 try:
                     result = agent.run(tc)
                     log.info("[%d/%d Worker %d] 结果: %s",
@@ -340,6 +370,13 @@ def _run_dispatched_devices(cfg: dict, test_cases: list[str],
 
                 with results_lock:
                     results[idx] = {"case": tc, **result, "device": device}
+                if result.get('needs_review'):
+                    agent._saygo_needs_review = True
+                    return
+            except ActionOutcomeUnknown as exc:
+                with results_lock:
+                    results[idx] = {'case': tc, 'device': device, **_review_result(agent, exc)}
+                return
             finally:
                 # requeue（如有）发生在 try 内、此减一之前，因此任何时刻
                 # 「队列空 且 busy==0」⇒ 不会再有新 case，其他 worker 可安全退出
@@ -349,8 +386,12 @@ def _run_dispatched_devices(cfg: dict, test_cases: list[str],
         log.info("[Worker %d device=%s] 队列空，退出", worker_idx, device)
 
     # 启动 N 个 worker thread
+    def run_worker(index):
+        with redact_values(accounts[index]):
+            worker(index)
+
     with ThreadPoolExecutor(max_workers=n, thread_name_prefix="saygo-dev") as pool:
-        futures = [pool.submit(worker, i) for i in range(n)]
+        futures = [pool.submit(run_worker, i) for i in range(n)]
         for f in as_completed(futures):
             try:
                 f.result()
@@ -367,7 +408,10 @@ def _run_dispatched_devices(cfg: dict, test_cases: list[str],
     # 填充任何因异常残留的 None slot
     for i, r in enumerate(results):
         if r is None:
-            results[i] = _empty_result('error', 'worker did not produce result', case=test_cases[i])
+            if any(getattr(ag, '_saygo_needs_review', False) is True for ag in agents):
+                results[i] = _paused_result(case=test_cases[i])
+            else:
+                results[i] = _empty_result('error', 'worker did not produce result', case=test_cases[i])
 
     return results
 
@@ -379,15 +423,7 @@ def _run_concurrent(cfg: dict, test_cases: list[str], url: str | None,
     from concurrent.futures import ThreadPoolExecutor, as_completed
     import threading
 
-    # Clean up Grid sessions once before creating agents
-    grid_url = cfg.get("browser", {}).get("grid_url", "")
-    if grid_url:
-        from saygo.platforms.selenium_grid import cleanup_grid_sessions
-        cleanup_grid_sessions(grid_url)
-
-    # Disable per-agent Grid cleanup
     cfg_no_cleanup = copy.deepcopy(cfg)
-    cfg_no_cleanup.setdefault("browser", {})["_skip_grid_cleanup"] = True
 
     log.info("并发模式: 创建 %d 个 Agent...", concurrency)
     agents = []
@@ -419,6 +455,8 @@ def _run_concurrent(cfg: dict, test_cases: list[str], url: str | None,
         with pool_lock:
             agent = agent_pool.pop()
         try:
+            if getattr(agent, '_saygo_needs_review', False) is True:
+                return _paused_result(case=tc)
             # Reset browser state between scenarios (cookies, storage, URL)
             # so each case starts fresh regardless of which case ran before.
             _prepare_browser_case(agent.platform, tc, url)
@@ -426,12 +464,16 @@ def _run_concurrent(cfg: dict, test_cases: list[str], url: str | None,
             with counter_lock:
                 counter[0] += 1
                 idx = counter[0]
-            log.info("[%d/%d] 开始执行: %s", idx, total, tc[:60])
+            log.info("[%d/%d] 开始执行", idx, total)
             result = agent.run(tc)
+            if result.get('needs_review'):
+                agent._saygo_needs_review = True
             log.info("[%d/%d] 结果: %s", idx, total, result.get("result", "?"))
             # fail/timeout/error → Healer 根因分析（失败不影响主流程）
             _maybe_heal(agent, tc, result)
             return {"case": tc, **result}
+        except ActionOutcomeUnknown as exc:
+            return {'case': tc, **_review_result(agent, exc)}
         finally:
             # Return agent to pool
             with pool_lock:

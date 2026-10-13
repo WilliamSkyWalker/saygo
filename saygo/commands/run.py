@@ -268,8 +268,7 @@ def cmd_run(test: str, platform: str | None = None, url: str | None = None,
             # 多 Android 设备：动态调度器，N worker 各持 Agent 抢任务
             log.info("调度模式: %d 台设备", len(devices))
             if accounts and len(accounts) < len(devices):
-                log.warning("账号池 %d 个 < 设备 %d 台，最后 %d 台将共用 accounts[0]",
-                            len(accounts), len(devices), len(devices) - len(accounts))
+                raise ValueError(f"账号数量不足：{len(accounts)} 个账号对应 {len(devices)} 台设备；补齐后再运行")
             results = _run_dispatched_devices(cfg, test_cases, devices, accounts, url,
                                               target_dir=target_dir)
         elif concurrency > 1:
