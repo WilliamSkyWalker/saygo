@@ -3,7 +3,7 @@ include scripts/install_agent_plugin.py scripts/install_saygo.py scripts/build_r
 include scripts/build_desktop.py scripts/package_desktop.py scripts/desktop_windows.spec
 include scripts/check_desktop_build.py
 recursive-include saygo *.py *.ps1 *.cjs *.md *.json *.txt
-recursive-include plugins/saygo-device *.md *.json
+recursive-include plugins/saygo-device *.py *.md *.json LICENSE
 include plugins/saygo-device/.mcp.json
 include plugins/saygo-device/.codex-plugin/plugin.json
 include plugins/saygo-device/.claude-plugin/plugin.json

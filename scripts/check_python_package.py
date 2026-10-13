@@ -13,18 +13,18 @@ import zipfile
 
 def check(wheel):
     wheel = Path(wheel).resolve()
+    plugin_files = ['LICENSE', 'scripts/doctor.py', 'scripts/saygo_mcp.py',
+                    '.mcp.json', '.codex-plugin/plugin.json', '.claude-plugin/plugin.json',
+                    'skills/device/SKILL.md']
     with zipfile.ZipFile(wheel) as bundle:
         with zipfile.ZipFile(io.BytesIO(bundle.read('saygo/_setup_source.zip'))) as source:
             required = ['pyproject.toml', 'setup.py', 'MANIFEST.in',
                         'scripts/install_agent_plugin.py', 'saygo/setup.py',
                         'saygo/integrations/browser_location.py', 'AGENTS.md',
-                        'plugins/saygo-device/.mcp.json',
-                        'plugins/saygo-device/.codex-plugin/plugin.json',
-                        'plugins/saygo-device/.claude-plugin/plugin.json',
-                        'plugins/saygo-device/skills/device/SKILL.md',
                         'extensions/saygo-browser/manifest.json']
-            for name in required:
-                assert name in source.namelist(), name
+            required.extend('plugins/saygo-device/' + name for name in plugin_files)
+            missing = sorted(set(required) - set(source.namelist()))
+            assert not missing, 'Missing setup source files: ' + ', '.join(missing)
             version = json.loads(source.read('distribution/release.json'))['version']
     with tempfile.TemporaryDirectory(prefix='saygo-wheel-check-') as temporary:
         root = Path(temporary)
@@ -51,7 +51,17 @@ def check(wheel):
             candidate = Path(executable)
             assert candidate.samefile(python)
             assert candidate.parent.resolve() == python.parent.resolve()
-        assert (market / 'skills/device/SKILL.md').is_file()
+        for name in plugin_files:
+            assert (market / name).is_file(), name
+        doctor = subprocess.run(
+            [str(python), '-I', str(market / 'scripts/doctor.py'),
+             '--platform', 'browser', '--profile', 'device', '--json'],
+            cwd=root, check=True, capture_output=True, text=True, timeout=30)
+        diagnosis = json.loads(doctor.stdout)
+        assert diagnosis['profile'] == 'device' and diagnosis['blocking'] == 0, diagnosis
+        assert any(item['name'] == 'saygo package' and item['status'] == 'ok'
+                   for item in diagnosis['checks']), diagnosis
+        assert json.loads((market / '.claude-plugin/plugin.json').read_text())['mcpServers']['saygo'] == server
         assert (managed / 'browser-extension/manifest.json').is_file()
         run([server['command'], '-I', '-c',
              'import saygo.setup; from saygo.mcp import server; '
@@ -61,11 +71,13 @@ def check(wheel):
         # Package installs use the wheel's interpreter, including on repeat setup.
         run([cli, 'setup', '--client', 'both', '--prepare-only', '--browser', 'none', '--root', managed])
         repeated = json.loads((managed / 'installation.json').read_text())
+        for name in plugin_files:
+            assert (market / name).is_file(), name
         assert repeated['runtime_mode'] == 'package'
         assert repeated['python'] == installed['python']
         assert json.loads((market / '.mcp.json').read_text())['mcpServers']['saygo'] == server
         assert not (managed / 'runtimes').exists()
-        print('Wheel install, setup, packaged resources, MCP import and repeat setup: passed')
+        print('Wheel install, setup, packaged resources, plugin doctor, MCP import and repeat setup: passed')
 
 
 if __name__ == '__main__':
