@@ -132,7 +132,6 @@ def _read_target_url(target_dir: Path) -> str | None:
       - URL: https://example.com
       - [example.com](https://example.com)
     """
-    import re
     readme = target_dir / "README.md"
     if not readme.exists():
         return None
@@ -149,6 +148,18 @@ def _read_target_url(target_dir: Path) -> str | None:
         m = re.match(r'^\[.*?\]\((https?://\S+)\)', line.strip())
         if m:
             return m.group(1).rstrip(")")
+    return None
+
+
+def _target_root(path: Path | None) -> Path | None:
+    """Return the top-level test target that owns a path, if it is inside tests."""
+    if path is not None:
+        try:
+            relative = path.resolve().relative_to(TESTS_DIR.resolve())
+        except ValueError:
+            return None
+        if relative.parts:
+            return TESTS_DIR / relative.parts[0]
     return None
 
 
@@ -179,19 +190,13 @@ def _load_accounts(target_dir: Path | None) -> list[dict]:
     路径算法与 _load_preconditions 一致。文件缺失或解析失败时返回 []，
     不阻塞测试运行 — 用例里的占位符会原样保留，LLM 看到会注意到。
     """
-    if target_dir is None:
+    root = _target_root(target_dir)
+    if root is None:
         return []
-    try:
-        rel = target_dir.resolve().relative_to(TESTS_DIR.resolve())
-    except ValueError:
-        return []
-    if not rel.parts:
-        return []
-    f = TESTS_DIR / rel.parts[0] / "_accounts.json"
+    f = root / "_accounts.json"
     if not f.exists():
         return []
     try:
-        import json
         data = json.loads(f.read_text(encoding="utf-8"))
         if not isinstance(data, list):
             log.warning("_accounts.json 顶层应是 list，实际是 %s，忽略", type(data).__name__)
@@ -232,15 +237,10 @@ def _load_preconditions(target_dir: Path | None) -> str | None:
 
     路径算法与 auto-report 一致：取 target_dir 相对 TESTS_DIR 的第一级目录名。
     """
-    if target_dir is None:
+    root = _target_root(target_dir)
+    if root is None:
         return None
-    try:
-        rel = target_dir.resolve().relative_to(TESTS_DIR.resolve())
-    except ValueError:
-        return None
-    if not rel.parts:
-        return None
-    pre_file = TESTS_DIR / rel.parts[0] / "_preconditions.md"
+    pre_file = root / "_preconditions.md"
     if not pre_file.exists():
         return None
     return pre_file.read_text(encoding="utf-8").rstrip()
@@ -297,11 +297,11 @@ def _resolve_test_target(test: str) -> tuple[list[str], Path | None]:
       - "path/to/file.md"               → 兼容旧 .md/.txt 单文件
       - "inline text"                   → 字面 case 文本
     """
+    path = Path(test)
+    candidates = [path] if path.is_absolute() else [path, TESTS_DIR / path]
+
     # 1) .feature 文件（绝对路径 / 相对当前目录 / TESTS_DIR 相对路径）
     if test.endswith(".feature"):
-        candidates = [Path(test)]
-        if not Path(test).is_absolute():
-            candidates.append(TESTS_DIR / test)
         for candidate in candidates:
             if candidate.is_file():
                 cases = _collect_feature_cases(candidate)
@@ -312,8 +312,7 @@ def _resolve_test_target(test: str) -> tuple[list[str], Path | None]:
         raise SystemExit(f"test file not found: {test}")
 
     # 2) 已存在的目录路径（含 .feature 文件，递归）
-    dir_candidates = [Path(test), TESTS_DIR / test]
-    for candidate in dir_candidates:
+    for candidate in candidates:
         if candidate.is_dir():
             feature_cases = _collect_feature_cases(candidate)
             if feature_cases:
@@ -325,13 +324,11 @@ def _resolve_test_target(test: str) -> tuple[list[str], Path | None]:
         target_dir = TESTS_DIR / parts[0]
         case_file = target_dir / "cases" / f"{parts[1]}.md"
         if case_file.exists():
-            with open(case_file) as f:
-                return _parse_md_cases(f.read()), target_dir
+            return _parse_md_cases(case_file.read_text()), target_dir
         # Try as-is (maybe the user typed "web-demo/cases/foo.md")
         case_file = target_dir / parts[1]
         if case_file.exists():
-            with open(case_file) as f:
-                return _parse_md_cases(f.read()), target_dir
+            return _parse_md_cases(case_file.read_text()), target_dir
 
     # 4) （兼容旧）target 名字（无斜杠）→ tests/<target>/cases/*.md
     target_dir = TESTS_DIR / test
@@ -339,30 +336,18 @@ def _resolve_test_target(test: str) -> tuple[list[str], Path | None]:
         cases_dir = target_dir / "cases"
         all_cases = []
         for case_file in sorted(cases_dir.glob("*.md")):
-            with open(case_file) as f:
-                all_cases.extend(_parse_md_cases(f.read()))
+            all_cases.extend(_parse_md_cases(case_file.read_text()))
         if all_cases:
             return all_cases, target_dir
 
     # 5) （兼容旧）显式 .md/.txt 文件路径
     if test.endswith((".md", ".txt")):
-        test_path = Path(test)
-        if not test_path.is_file() and not test_path.is_absolute() \
-                and (TESTS_DIR / test).is_file():
-            test_path = TESTS_DIR / test
-        if not test_path.is_file():
+        test_path = next((candidate for candidate in candidates if candidate.is_file()), None)
+        if test_path is None:
             # 同上：路径打错不能裸 FileNotFoundError 也不能变 inline case
             log.error("测试文件不存在: %s", test)
             raise SystemExit(f"test file not found: {test}")
-        with open(test_path) as f:
-            cases = _parse_md_cases(f.read())
-        resolved = test_path.resolve()
-        if TESTS_DIR.resolve() in resolved.parents:
-            rel = resolved.relative_to(TESTS_DIR.resolve())
-            target_name = rel.parts[0] if rel.parts else None
-            if target_name:
-                return cases, TESTS_DIR / target_name
-        return cases, None
+        return _parse_md_cases(test_path.read_text()), _target_root(test_path)
 
     # 6) Inline case text
     return [test], None
