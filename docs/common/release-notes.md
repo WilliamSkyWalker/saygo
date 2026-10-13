@@ -33,6 +33,6 @@ pipx upgrade saygo-agent-control
 
 ## 验证与限制
 
-网络修复已经通过超过 33 MiB 的真实 Chrome 扩展 → native host → CLI 校验，正文长度、SHA-256、中文/emoji 尾部一致，大 POST 正文也完整。0.4.17 标签回归为 961 项离线通过、7 项环境跳过、49 项 Node 通过，真实扩展 4 项与 Playwright 1 项通过。0.4.18 重新检查对应版本的安装、回归和桌面产物；检查结果记录在本版验证文件。
+网络修复已经通过超过 33 MiB 的真实 Chrome 扩展 → native host → CLI 校验，正文长度、SHA-256、中文/emoji 尾部一致，大 POST 正文也完整。0.4.18 标签回归为 961 项离线通过、7 项环境跳过、49 项 Node 通过，真实扩展 4 项与 Playwright 1 项通过。Linux、Windows、macOS 干净安装与重复 setup 均通过，三平台桌面各 45 项及实际冻结启动/握手/模拟 IPC 通过。PyPI、GitHub 及三平台桌面包已发布；扩展 0.4.17 经商店 API 确认为已审核通过、全量发布。
 
 四端真机、完整真实模型业务任务、桌面签名和公证不在通过范围内。发布、安装、构建和商店状态以[本版验证记录](history/release-0.4.18.md)的实际结果为准；不将源码修复描述为六端全部可用。
