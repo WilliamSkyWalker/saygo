@@ -263,9 +263,15 @@ class BridgeTests(unittest.TestCase):
                 worker.start()
                 with self.assertRaisesRegex(RuntimeError, 'extension timeout; outcome unknown'):
                     Client(tmp, timeout=3).call('scroll_at', page_id='test:1', x=10, y=20, amount=-3)
+                # The error response is published before the diagnostic status.
+                # Wait for that independent publication without resending input.
+                end = time.monotonic() + 5
                 after = json.loads(status.read_text())
+                while 'last_timeout' not in after and time.monotonic() < end:
+                    time.sleep(.01)
+                    after = json.loads(status.read_text())
                 self.assertTrue(after['connected'])
-                self.assertEqual(after['last_timeout']['operation'], 'scroll_at')
+                self.assertEqual(after.get('last_timeout', {}).get('operation'), 'scroll_at')
                 self.assertIsNone(proc.poll())
                 self.assertEqual(Client(tmp, timeout=3).call('pages'), ['current'])
                 with self.assertRaisesRegex(RuntimeError, 'response exceeds'):

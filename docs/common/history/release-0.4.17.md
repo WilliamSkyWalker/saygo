@@ -1,27 +1,34 @@
 # 0.4.17 发布验证
 
-用户于 2026-10-13 明确授权提交、推送、发布所有需要更新的模块，并批准增加版本号。远端核对时 GitHub 与 PyPI 最新正式版本均为 0.4.16，0.4.17 尚不存在。
+用户于 2026-10-13 明确授权提交、推送、发布与升版，后续补充网络采集“不限制长度”。发布标签为 `v0.4.17`，提交 `d0f97beef9ff4ba170ec911a57fa6323a6fcdc3b`。用户随后又明确要求升级至 0.4.18，后续状态见[0.4.18 记录](release-0.4.18.md)。
 
-Python、托管安装器、native host、客户端插件、桌面产物和浏览器扩展采用 0.4.17。用户随后补充“不限制长度”，本轮纳入已有的网络采集修复并单独验收，扩展因此一并升版。商店上传和审核完成分别核对。
+## 发布结果
 
-## 发布前证据
+- [GitHub 正式发布](https://github.com/WilliamSkyWalker/saygo/releases/tag/v0.4.17)：12 个附件齐全，包括源码、带摘要安装器、商店/开发扩展 ZIP、发布清单、校验文件和三平台桌面包及摘要。实际下载的小型产物与 SHA-256 一致；三平台桌面公开摘要与 GitHub 上传摘要一致。
+- [PyPI 0.4.17](https://pypi.org/project/saygo-agent-control/0.4.17/)：wheel 与 sdist 的版本 JSON 均已核实可用，未撤回；[发布流水线](https://github.com/WilliamSkyWalker/saygo/actions/runs/38363558695)成功。
+- [三平台桌面构建](https://github.com/WilliamSkyWalker/saygo/actions/runs/38363659634)与[附件发布](https://github.com/WilliamSkyWalker/saygo/actions/runs/38364165008)成功，上传前核实与标签相同提交并逐个校验摘要。
+- [源码和商店流水线](https://github.com/WilliamSkyWalker/saygo/actions/runs/38363558702)成功。商店返回 0.4.17 为 `PENDING_REVIEW`；当时公开版本仍为 0.4.13，不能声称新扩展已审核上线。
+- [官网部署](https://github.com/WilliamSkyWalker/saygo/actions/runs/38363493534)成功；主页及更新后的隐私页 HTTP 200，已核实无固定正文/事件保留上限的说明。
 
-十类修复及迁移见[需求核对记录](../requirements-audit.md)。修复阶段 948 项离线通过、15 项跳过；Linux 无头真实扩展 3 项、Playwright 1 项通过。没有四端真机或真实模型业务验收。
+## 实际验证
 
-## 网络完整性专项验证
+| 范围 | 结果 |
+| --- | --- |
+| 七组离线核心回归 | 968 项中 961 通过、7 跳过：两项 Windows、四项真实扩展、一项 Playwright 由独立环境检查 |
+| Node 扩展测试 | 49 项通过 |
+| Linux 真实 Chrome 扩展、native host、CLI/MCP | 4 项通过，包括后台输入、截图、重启、请求去重及大正文 |
+| Linux 真实 Playwright | 1 项通过，包括 CLI、持久会话、工作流与人工接管 |
+| MCP SDK | 1.2.0/Pydantic 2.13.5 与 2.3.0 的 device/full stdio、工具集合与输入参数通过；非全中间版本逐一验证 |
+| Windows 桥接 | 17 项 host/分帧及 14 项共享发现通过；包含超过 32 MiB 回执的模拟扩展 |
+| Linux/Windows/macOS wheel 安装 | 干净环境、仓库外安装与重复 setup 全部通过 |
+| 三平台桌面 | 各 45 项测试；冻结 Qt 启动、host 版本/握手/模拟扩展 IPC 与归档检查通过 |
 
-取消网络记录的固定裁剪/淘汰与 32 MiB 网络回执限制，响应到达时保存字节，缓存失效时验证完整性后恢复。Node 49 项与 native-host 协议 17 项通过；后者包含超过 32 MiB 的模拟扩展回执。真实 Linux Chrome 扩展 → native host → CLI 返回超过 33 MiB 的测试正文，长度、SHA-256、中文/emoji 尾部一致，且实际使用流恢复缓存已淘汰的正文。测试只使用自有页面，未访问业务会话；不代表历史清单已补全。
+真实大响应通过 Chrome 扩展 → native host → CLI 返回超过 33 MiB 的完整正文，字节长度、SHA-256、中文/emoji 尾部一致，实际从流恢复浏览器已淘汰的正文缓存，并验证大 POST 正文。全部使用自有测试页面；不代表现有业务 CSV 或历史清单已经完整。
 
-## 本次发布进度
+## 验证期间修正与边界
 
-候选版本在 Linux/WSL2、Python 3.12.3 的完整依赖环境运行七组离线回归：963 项中 957 通过、6 项真实环境用例跳过（两项 Windows、三项扩展、一项 Playwright）。Qt 45 项全部通过；Node 42 项通过。sdist → wheel 构建、twine 严格元数据检查、仓库外干净 wheel 安装及重复 setup 通过。
+预检发现 MCP 最低版本缺少 remove_tool，补受检查的注册表兼容分支；SDK 2.x 测试读取协议字段别名；最低 SDK 固定兼容 Pydantic。另修正测试 Chromium 退出与临时目录删除的先后顺序。
 
-恢复域名访问后，真实 MCP 1.2.0 握手暴露早期 SDK 没有 remove_tool 的兼容缺陷。补充受检查的注册表分支和 3 项回归后通过；MCP 1.2.0 与 1.27.2 的 device/full stdio、工具集合、观察/请求参数及独立操作查询均通过。CI 增加最低/最新可解析 SDK 矩阵；不宣称所有中间版本均已逐一运行。
+PyPI 流水线首次 Windows 测试遇到错误回执已发布、诊断状态尚未写完的读取竞态。同标签另一条 Windows 检查已通过；只重跑失败作业后通过，未重放业务输入。后续 0.4.18 测试改为有界等待状态发布，产品逻辑不变。
 
-首轮远端桌面构建三平台全部通过。Python 预检中的最低 SDK 被 Pydantic 2.14 删除的私有接口阻塞，最新 SDK 2.3.0 的检查脚本则仍使用旧字段名；真实浏览器用例也暴露同一检查字段问题。检查改为读取协议字段别名，最低 SDK 矩阵固定已实测兼容的 Pydantic 2.13.5；两个全新虚拟环境中的 MCP 1.2.0 / 2.3.0 均通过真实 stdio。默认安装继续解析当前 SDK，未缩小声明的 SDK 范围。
-
-第二轮远端验证中，核心回归 966 项（960 通过、6 跳过）、Node 42 项、两组 MCP SDK 和三平台桌面构建全部通过；真实扩展 3 项通过。Playwright 操作断言完成后，临时目录清理遇到 Chrome 子进程仍写入配置的竞态。测试改为先向自有隔离浏览器发送关闭请求，等待进程退出，并在目录删除前关闭日志及测试服务；Linux、MCP 2.3.0 的完整 Playwright 用例修正后通过。
-
-最终提交的三平台安装、桌面构建和标签 CI 待远端执行。当前尚不代表 PyPI、GitHub 桌面附件或商店已完成发布；实际结果在验证后补充。
-
-三平台桌面仍为未签名测试版；不包含 Intel macOS 安装包。用户现有客户端和在线浏览器连接不因仓库发布自动升级或断开。
+桌面包为 Windows x64、macOS arm64、Linux x86_64，未签名/公证，不含 Intel macOS。四端真机业务与完整真实模型任务未运行。未升级用户本机安装、未断开或重载现有扩展；完整网络修复需要新版扩展及新版 native host 配套使用。
