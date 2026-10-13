@@ -20,6 +20,10 @@ import sys
 from saygo.platforms.browser_extension import ExtensionBrowserPlatform
 
 
+def large_network_body():
+    return ('{"records":"' + 'x' * (33 * 1024 * 1024) + '","tail":"完整😀"}').encode()
+
+
 class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         payload = self.rfile.read(int(self.headers.get('Content-Length', 0)))
@@ -29,6 +33,19 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(json.dumps({'echo': payload.decode()}).encode())
 
     def do_GET(self):
+        if self.path == '/large-network-body':
+            body = large_network_body()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            # Keep delivery asynchronous so the extension can subscribe before
+            # completion, then exceed Chrome's per-resource response cache.
+            for offset in range(0, len(body), 65536):
+                self.wfile.write(body[offset:offset+65536])
+                self.wfile.flush()
+                time.sleep(.003)
+            return
         if self.path in ('/scroll', '/capture'):
             name = 'scroll_fixture.html' if self.path == '/scroll' else 'capture_fixture.html'
             body = Path(__file__).with_name(name).read_bytes()
@@ -76,6 +93,9 @@ class Handler(BaseHTTPRequestHandler):
 
 @unittest.skipUnless(os.environ.get("SAYGO_TEST_CHROME"),"set SAYGO_TEST_CHROME for real extension integration")
 class ExtensionLive(unittest.TestCase):
+    def test_large_network_body_through_extension_native_host_and_cli(self):
+        self.run_live(self.check_large_network_body)
+
     def test_mcp_restart_preserves_connection_and_selected_page(self):
         self.run_live(lambda *args: None, reconnect_mcp=True)
 
@@ -272,6 +292,39 @@ class ExtensionLive(unittest.TestCase):
                 self.assertFalse(page.is_closed())
             finally:
                 context.close()
+
+    def check_large_network_body(self, context, page, ui, platform, url, root):
+        platform.network('clear')
+        size=page.evaluate("async () => (await (await fetch('/large-network-body')).arrayBuffer()).byteLength")
+        expected=large_network_body()
+        self.assertEqual(size,len(expected))
+        command=[sys.executable,'-m','saygo.cli','device','network','read',
+                 '--session','daily-web','--url','/large-network-body']
+        env={**os.environ,'SAYGO_HOME_DIR':str(root/'saygo-home')}
+        deadline=time.monotonic()+20
+        row=None
+        while time.monotonic()<deadline:
+            result=subprocess.run(command,env=env,capture_output=True,text=True,timeout=20)
+            self.assertEqual(result.returncode,0,result.stderr)
+            record=json.loads(result.stdout)
+            row=next((e for e in record['events'] if e['kind']=='http.body'),None)
+            if row is not None: break
+            page.wait_for_timeout(100)
+        self.assertIsNotNone(row)
+        self.assertNotIn('unavailable',row)
+        actual=base64.b64decode(row['body']) if row['base64_encoded'] else row['body'].encode()
+        self.assertEqual(len(actual),len(expected))
+        self.assertEqual(hashlib.sha256(actual).digest(),hashlib.sha256(expected).digest())
+        self.assertEqual(json.loads(actual)['tail'],'完整😀')
+        self.assertEqual(row.get('source'),'stream', 'large response must survive Chrome cache eviction')
+        self.assertFalse(row['truncated'])
+        self.assertEqual(record['dropped'],0)
+        platform.network('clear')
+        post_body='内容😀' * 20000
+        page.evaluate("async body => (await fetch('/api', {method:'POST',body})).text()", post_body)
+        rows=platform.network(url='/api')['events']
+        request=next(e for e in rows if e['kind']=='http.request')
+        self.assertEqual(request['post_data'],post_body)
 
     def check_background_input(self, context, page, ui, platform, url, root):
         """Exercise the native bridge with an actually inactive owned tab."""

@@ -170,6 +170,53 @@ class BridgeTests(unittest.TestCase):
                 Client(tmp, timeout=.15).call("tap", page_id="test:1",x=1,y=2)
             self.assertEqual(list(Path(tmp).glob("*.request")),[])
 
+    def test_network_response_over_32_mib_keeps_full_chunked_payload(self):
+        # Real host process and framing, simulated extension. More than the
+        # former *character* cap, including Unicode split across small frames.
+        body = 'x' * (32 * 1024 * 1024) + '完整😀'
+        with tempfile.TemporaryDirectory() as tmp:
+            proc = subprocess.Popen([sys.executable, '-m', 'saygo.integrations.browser_bridge',
+                'host', '--directory', tmp], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE)
+            errors = []
+            worker = None
+            try:
+                read_frame(proc.stdout)
+                write_frame(proc.stdin, {'type':'hello', 'protocol':1, 'version':'test'})
+                status = Path(tmp) / 'status.json'
+                end = time.monotonic() + 5
+                while time.monotonic() < end:
+                    if status.exists() and json.loads(status.read_text()).get('connected'):
+                        break
+                    time.sleep(.02)
+
+                def extension():
+                    try:
+                        request = read_frame(proc.stdout)
+                        self.assertEqual(request['operation'], 'network_read')
+                        payload = json.dumps({'result': {'events': [{'body':body}]}}, ensure_ascii=False)
+                        for offset in range(0, len(payload), 100000):
+                            write_frame(proc.stdin, {'id':request['id'], 'chunk':payload[offset:offset+100000],
+                                'last':offset+100000 >= len(payload)})
+                    except Exception as exc:
+                        errors.append(exc)
+
+                worker = threading.Thread(target=extension, daemon=True)
+                worker.start()
+                result = Client(tmp, timeout=15).call('network_read', page_id='test:1')
+                self.assertEqual(result['events'][0]['body'], body)
+                self.assertTrue(json.loads(status.read_text())['connected'])
+                worker.join(5)
+                self.assertFalse(worker.is_alive())
+                self.assertFalse(errors)
+            finally:
+                proc.stdin.close()
+                proc.wait(timeout=5)
+                if worker:
+                    worker.join(2)
+                proc.stdout.close()
+                proc.stderr.close()
+
     def test_host_timeout_keeps_connection_and_ignores_late_chunks(self):
         with tempfile.TemporaryDirectory() as tmp:
             proc = subprocess.Popen([

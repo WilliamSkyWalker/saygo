@@ -9,12 +9,13 @@ function browser(tabs = [{id:1,url:'https://example.test'}]) {
   let disconnected = 0;
   const clock=new Clock();
   const removed = [];
+  const messages = [];
   const listeners = {};
   const listener = {addListener() {}};
   const port = {
     onDisconnect:listener,
     onMessage:{addListener(fn) { listeners.message = fn; }},
-    postMessage() {}, disconnect() { disconnected++; }
+    postMessage(message) { messages.push(message); }, disconnect() { disconnected++; }
   };
   const context = vm.createContext({
     setTimeout:clock.setTimeout,clearTimeout:clock.clearTimeout,Date:clock.Date,
@@ -24,14 +25,35 @@ function browser(tabs = [{id:1,url:'https://example.test'}]) {
       tabs:{query:async () => tabs, remove:async id => removed.push(id),
         onCreated:listener,onUpdated:listener,onRemoved:listener},
       debugger:{onDetach:listener,onEvent:listener},
-      runtime:{connectNative:() => port,onMessage:listener}
+      runtime:{connectNative:() => port,onMessage:listener,getManifest:() => ({version:'test'})}
     }
   });
   vm.runInContext(source.replace("import {NetworkJournal} from './network.js';", ''), context);
-  return {clock, context, removed, listeners, disconnected:() => disconnected,
+  return {clock, context, removed, listeners, messages, disconnected:() => disconnected,
     connected:() => vm.runInContext('port !== null', context),
     activate:() => vm.runInContext('port = {}; negotiated = true;', context)};
 }
+
+test('native response chunks preserve Unicode at frame boundaries', async () => {
+  const b=browser([]);
+  const connected=b.context.connect();
+  await new Promise(resolve=>setImmediate(resolve));
+  b.listeners.message({type:'hello',protocol:1});
+  await connected;
+  const prefix=JSON.stringify({result:''}).indexOf('""')+1;
+  const body='x'.repeat(100000-prefix-1)+'😀尾'.repeat(40000);
+  b.context.execute=async()=>body;
+  b.listeners.message({id:'large',operation:'network_read',deadline:Date.now()/1000+60});
+  await new Promise(resolve=>setImmediate(resolve));
+  const frames=b.messages.filter(m=>m.id==='large');
+  assert.ok(frames.length>1);
+  for (const frame of frames) {
+    assert.ok(frame.chunk.isWellFormed(), 'a native frame must not split a Unicode code point');
+    assert.ok(Buffer.byteLength(JSON.stringify(frame))<1024*1024);
+  }
+  assert.equal(frames.at(-1).last,true);
+  assert.equal(JSON.parse(frames.map(f=>f.chunk).join('')).result,body);
+});
 
 test('handshake timeout keeps the native port open', async () => {
   const b = browser();

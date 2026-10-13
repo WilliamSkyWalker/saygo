@@ -58,7 +58,7 @@ Saygo Browser 将现有浏览器标签页连接到本机 Saygo，让 AI 编程�
 - debugger：截图、指针/键盘/滚轮及 HTTP/WebSocket/SSE 观察；CDP 操作有固定白名单，不提供任意脚本工具，需用户连接，释放后分离调试器。
 - tabs：发现 HTTP(S) 标签、读取 URL/标题、按用户请求选择/创建/导航/关闭，新页供显式选择。
 - storage：保存会话级浏览器身份和已释放标签，避免取消失效或旧 ID 误绑，不建广告画像。
-- nativeMessaging：与本机 com.saygo.browser host 交换有界 JSON，不开放远控服务器。
+- nativeMessaging：与本机 com.saygo.browser host 交换分帧 JSON，不开放远控服务器。
 
 没有远程代码：JavaScript 随 ZIP 打包，消息是结构化命令，不是下载脚本。native host 是用户另装的本地软件，需向审核者说明依赖。
 

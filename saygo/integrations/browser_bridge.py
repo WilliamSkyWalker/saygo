@@ -187,6 +187,9 @@ def _serve_locked(directory, source, sink):
                         raise ValueError("request expired before dispatch")
                     write_frame(sink, request)
                     chunks = []
+                    response_size = 0
+                    network_response = request['operation'] in {
+                        'network_read', 'network_start', 'network_stop', 'network_clear'}
                     duration = request.get('arguments', {}).get('duration', 0) if request['operation'] == 'long_press' else 0
                     extra = duration if isinstance(duration, (int, float)) and 0 < duration <= 30 else 0
                     end = time.monotonic() + RESPONSE_TIMEOUT + extra
@@ -205,7 +208,11 @@ def _serve_locked(directory, source, sink):
                             # chunks satisfy a new request or extend its timeout.
                             continue
                         chunks.append(item["chunk"])
-                        if sum(map(len, chunks)) > MAX_RESPONSE_BYTES:
+                        response_size += len(item["chunk"])
+                        # Network data is already framed. Preserve full bodies
+                        # regardless of size; frame validation and deadlines
+                        # still apply, as does the cap for other operations.
+                        if not network_response and response_size > MAX_RESPONSE_BYTES:
                             raise RuntimeError("extension response exceeds 32 MiB")
                         if item.get("last"):
                             atomic_json(response, json.loads("".join(chunks)))

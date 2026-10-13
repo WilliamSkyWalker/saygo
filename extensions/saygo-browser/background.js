@@ -18,7 +18,9 @@ async function startNetwork(tabId, explicit = false) {
     if (!port || ticket !== generation || networkPaused.has(tabId)) return;
     network.begin(tabId);
     try {
-      await cdp(tabId, 'Network.enable', {maxTotalBufferSize:4194304, maxResourceBufferSize:262144, maxPostDataSize:32768});
+      // Use Chrome's response cache defaults as a fallback; NetworkJournal
+      // also saves arriving bytes. Zero removes the CDP post-data size cap.
+      await cdp(tabId, 'Network.enable', {maxPostDataSize:0});
       if (!port || ticket !== generation) network.end(tabId, 'disconnected');
     } catch (error) { network.end(tabId, String(error.message || error)); throw error; }
   })();
@@ -184,9 +186,15 @@ async function connect() {
       } catch (error) { response = {error: String(error.message || error)}; }
       const text = JSON.stringify(response);
       // Native host receives <= 1 MiB per frame, including Unicode JSON overhead.
-      for (let i = 0; i < text.length; i += 100000) {
+      for (let i = 0; i < text.length;) {
         if (port !== current) return;
-        current.postMessage({id: request.id, chunk: text.slice(i, i + 100000), last: i + 100000 >= text.length});
+        let end = Math.min(i + 100000, text.length);
+        // Python joins decoded frames as Unicode code points, so a UTF-16
+        // surrogate pair must travel in the same native message.
+        const last = text.charCodeAt(end - 1);
+        if (end < text.length && last >= 0xD800 && last <= 0xDBFF) end--;
+        current.postMessage({id: request.id, chunk: text.slice(i, end), last: end >= text.length});
+        i = end;
       }
     })().catch(error => { connectionError = String(error); });
   });

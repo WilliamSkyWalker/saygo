@@ -27,7 +27,7 @@ def main():
         env = {**os.environ, 'SAYGO_TEST_CHROME': chrome, 'SAYGO_TEST_HEADED': '1'}
         subprocess.run([sys.executable, '-m', 'unittest', 'discover', '-s',
                         'tests/extension_demo', '-p', 'test_live.py', '-v'],
-                       cwd=root, env=env, check=True, timeout=240)
+                       cwd=root, env=env, check=True, timeout=360)
         subprocess.run([sys.executable, '-m', 'unittest', 'discover', '-s',
                         'tests/browser_demo', '-p', 'test_playwright_live.py', '-v'],
                        cwd=root, env=env, check=True, timeout=120)

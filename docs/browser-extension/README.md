@@ -141,13 +141,15 @@ saygo device network clear --session browser-test
 | `sse.message` | 原生 EventSource 消息、事件名及 ID |
 | `stream.chunk` | fetch 的 text/event-stream 或 NDJSON base64 分块；按顺序解码合并，分块不一定是完整 SSE；不支持时返回 stream.unavailable |
 
-普通 HTTP 长轮询记为 HTTP。轮询将 `next_cursor` 作为下次 after，并携带 capture_id；ID 改变表示清空/重启，从 0 开始。limit 为 1–200，过滤先于分页。`dropped/oldest_cursor` 表示淘汰，`untracked_requests` 表示丢失的请求关联，`truncated` 表示字段裁剪。
+普通 HTTP 长轮询记为 HTTP。轮询将 `next_cursor` 作为下次 after，并携带 capture_id；ID 改变表示清空/重启，从 0 开始。limit 为 1–200，过滤先于分页。分页只限制每次返回的事件数，不限制单条正文长度或采集总量。大响应应将 CLI JSON 直接重定向到私有文件后程序化解析，不能把终端或 Agent 显示层的截断预览当作完整导出。扩展 0.4.17 不主动淘汰或裁剪，兼容字段 `dropped/untracked_requests` 为 0、`truncated` 为 false；`oldest_cursor` 是现存首条记录的位置。
 
-每页最多 1,000 事件/1 MiB，总计 8 MiB；字段最多 32 Ki 字符，每页活动请求关联最多 512。响应正文为尽力获取，缓存淘汰、重定向、目标变化或完成请求过多时可能不可用。
+0.4.17 移除字段 32 Ki 字符、事件数量、每页/全局字节数、活动请求数及同时读取正文数量的固定上限，native host 的网络响应也不再受 32 MiB 总长度限制。HTTP 响应到达时保存原始流字节；浏览器正文缓存淘汰后，仅在字节完整时从流恢复，按字节拼接后再解码，保留中文、emoji 和二进制。跨 native message 分片不会切开 Unicode 字符。
+
+浏览器未提供数据、流不完整、能力缺失或目标失效仍会返回 `unavailable/stream_error`；解除 Saygo 限额不能找回采集前或已丢失的历史。已有会话、成功 HTTP 响应都不是业务成功证据，清单完整性及历史范围须另行核对。记录保留在内存，使用量随采集增长；可分页导出，确认完成后显式 clear 或 stop。
 
 stop 只暂停记录、保留旧数据，不断开网络或视觉控制；start 新建采集，clear 清空已存事件但保留记录状态。释放、重载、浏览器退出丢弃内存记录。采集不追溯历史，挂接竞争可能漏新页首批请求；已有 socket 不保证历史，独立 worker/跨进程 iframe 目标尚未挂接。此接口仅适用于扩展，不适用于独立 Playwright/Selenium。
 
-头、正文可能含凭据。记录先留在扩展有限内存，查询后经本地桥返回，不自动加入视觉模型提示或 QA 报告。按授权导出到合适位置，隐私见[隐私说明](privacy.md)。
+头、正文可能含凭据。记录先留在扩展内存，查询后经本地桥返回，不自动加入视觉模型提示或 QA 报告。按授权导出到合适位置，隐私见[隐私说明](privacy.md)。
 
 ## 验收
 
