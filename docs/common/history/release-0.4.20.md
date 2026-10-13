@@ -25,24 +25,60 @@ setup 插件副本的完整性检查；测试必须核验分发后的文件，�
 
 ## 本版验证与发布状态
 
-以下状态随实际结果更新；待执行项目不算通过，也不沿用 0.4.19 的产物结果。
+0.4.20 已于 2026-10-14 01:36（UTC+8）发布到 PyPI。以下为本版实际执行结果，
+未沿用 0.4.19 的产物验证作为本版通过证据。
 
 | 项目 | 当前状态 |
 | --- | --- |
 | 缺陷回归 | 先以加强后的产物检查验证公开 0.4.19 wheel，准确拒绝三个缺失文件；修复后 0.4.20 本地产物通过 |
-| sdist 与 wheel 构建 | 本地 `python -m build` 从 sdist 构建 wheel、`twine check --strict` 均通过；CI 最终产物待核实 |
-| 三文件完整性 | 本地 sdist、wheel 内嵌源码与完整白名单全部一致，三个插件文件和八个输入修复文件完整，源码字节对应构建输入；CI 最终标签产物待核实 |
-| 插件实际诊断与配置 | 本地隔离解释器实际运行 `doctor.py --platform browser --profile device --json`，核验 `blocking=0`、已安装包可用和 Claude/MCP server 一致；三平台 CI 待执行 |
-| 干净安装与重复 setup | 本地 Linux 隔离 wheel 安装、资源/MCP 导入及重复 setup 通过；CI Linux/Windows/macOS 待执行，插件准备不等于实际客户端加载验收 |
-| 核心、插件与兼容性检查 | 本地 release installation 5 项通过、两处 `claude plugin validate` 通过、五处版本声明一致；CI 完整回归和兼容性检查待执行 |
-| 提交、推送及标签 | 本轮已获授权，最终提交、标签及远端一致性待核实 |
-| PyPI | 待发布并核实 wheel/sdist、未撤回状态、simple 索引和下载 SHA-256 |
+| sdist 与 wheel 构建 | 本地及 CI 均从 sdist 构建 wheel，`twine check --strict` 两产物通过 |
+| 三文件完整性 | 上传前已下载 CI 产物严格审计：sdist 与内嵌源码双白名单精确相等、无缺项；全部打包源码逐字节对应 `v0.4.20`，三个插件文件和八个输入修复文件齐全，RECORD 与隐私路径排除通过 |
+| 插件实际诊断与配置 | Linux/Windows/macOS 安装后的隔离解释器实际运行 `doctor.py --platform browser --profile device --json`，均通过 `blocking=0`、已安装包可用及 Claude/MCP server 一致检查 |
+| 干净安装与重复 setup | CI Linux/Windows/macOS 全通过，首次及重复 setup 均检查插件资源；公开下载 wheel 在 Linux 再次通过完整脚本。插件准备与诊断不等于实际 Agent 客户端加载验收 |
+| 核心、插件与兼容性检查 | 本地安装回归 5 项、两处 `claude plugin validate` 和五处版本声明检查通过；CI 核心 1,043 通过/7 跳过、Node 51 通过、Windows 桥接 31 通过、两套 MCP SDK 兼容检查通过 |
+| 提交、推送及标签 | 打包修复 `ec45aef`、版本/文档准备 `0e18964` 已推送；不可变 `v0.4.20` 指向 `0e18964`，与远端核对一致 |
+| PyPI | [0.4.20](https://pypi.org/project/saygo-agent-control/0.4.20/) wheel/sdist 已公开、均未撤回；版本 JSON、simple 索引、实际下载与 CI 哈希一致，核实当时 latest 为 0.4.20 |
 | GitHub / 桌面 / 扩展商店 | 不在本轮发布范围内；不创建公开 Release、不发布新桌面包、不上传商店 |
-| 用户安装环境 | 仍为原安装的 0.4.18，未直接升级或修改 site-packages；发布与用户已升级分开记录 |
+| 用户安装环境 | 发布收尾只读复核时本地运行时已为 0.4.19，八个输入修复源码与该公开 wheel 完全一致；本轮未执行其升级或修改 site-packages。尚未安装 0.4.20，也未确认已运行客户端重新加载新代码 |
+
+## CI 运行与范围
+
+[Python package 流程 38439172717](https://github.com/WilliamSkyWalker/saygo/actions/runs/38439172717)
+由 `v0.4.20` 推送触发。产品源码和所有验证脚本均来自 `0e18964`，无需覆盖
+旧标签的浏览器测试。`saygo/platforms`、`saygo/devices`、`saygo/runtime` 与
+0.4.19 的源码没有变化，本轮包装了相同的输入修复实现。
+
+| CI 项目 | 实际结果 |
+| --- | --- |
+| 核心回归 | `scripts/check_core_tests.py`：1,050 项，1,043 通过、7 跳过、0 失败 |
+| 扩展 JavaScript | 51 项通过、0 跳过 |
+| Windows 桥接 | 原生桥接 17 项、共享发现 14 项，共 31 项通过 |
+| MCP SDK | MCP 1.2.0/Pydantic 2.13.5 与 MCP 2.3.0/Pydantic 2.14.1 的 device/full stdio、工具集、schema 与 request query 检查通过 |
+| 真实浏览器 | 独立 Chromium 的扩展/native host/后台截图滚动 4 项通过（186.426 秒）；Playwright 1 项通过（12.228 秒），无跳过 |
+| 构建附加回归 | 安装 33、升级 14、桥接 17，共 64 项通过；Node 51 项也通过 |
+| Ubuntu | 24.04.5 x64、Python 3.11.17：wheel 安装、资源、doctor、MCP 与重复 setup 通过 |
+| Windows | Server 2025（10.0.26100）x64、Python 3.11.9：同上全部通过 |
+| macOS | 26.6.2 arm64、Python 3.11.9：同上全部通过，无路径别名导致的 doctor 重执行超时 |
+
+## 公开产物与分发核对
+
+| 文件 | 字节数 | SHA256 |
+| --- | ---: | --- |
+| `saygo_agent_control-0.4.20-py3-none-any.whl` | 1074842 | `dfbcdfd916689d6252c34a6582cb94081b546b496afbfd0a20d11ac7b7d729e6` |
+| `saygo_agent_control-0.4.20.tar.gz` | 573196 | `afe83cb42a0f5386d68a7fd810b703a9eed3336c83d1b86fe0b4e4c4e48ac878` |
+
+上传前 CI 产物审计通过；发布后公开下载的两文件与 CI、PyPI JSON 和 simple
+索引一致。186 个内嵌源码、sdist 中 186 个标签文件及 wheel 的 111 个直接
+源码文件均完成原始字节比对。公开 wheel 又在独立 Linux 环境完成
+`scripts/check_python_package.py`，包括实际 doctor JSON 诊断和重复 setup。
+
+推送标签时暂时停用会额外发布 GitHub Release/商店包的 `release.yml`，随后
+已恢复 `active`；核实该标签无该流程运行、无公开 GitHub Release。Python
+发布检查始终启用，完整流水线一次通过，用时 6 分 12 秒。
 
 ## 升级和已有插件修复
 
-PyPI 0.4.20 发布核实后，按原安装方式升级，例如
+PyPI 0.4.20 已核实公开可用，按原安装方式升级，例如
 `pipx upgrade saygo-agent-control`。若曾用遗漏文件的包执行 setup，需要对原
 客户端重新执行一次 `saygo setup --client CLIENT`，保留原来的 `--root` 等选项，
 补齐托管目录中的插件文件；再重启客户端加载更新。普通包升级不会自动重新
