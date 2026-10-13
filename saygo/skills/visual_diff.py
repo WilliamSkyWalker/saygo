@@ -1,12 +1,12 @@
 """Visual Diff Skill — compare consecutive screenshots to detect changes.
 
-Helps the LLM verify whether an action took effect by highlighting
-changed regions between the previous and current screenshot.
+Highlights changed regions as visual context for the LLM. Pixel changes alone
+do not establish whether the intended action succeeded.
 """
 
 from __future__ import annotations
 
-import io
+from collections import deque
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
@@ -48,8 +48,10 @@ def _compute_diff(prev: Image.Image, curr: Image.Image,
 
     # Calculate change ratio
     total_pixels = binary.size[0] * binary.size[1]
-    changed_pixels = sum(1 for p in binary.getdata() if p > 0)
+    changed_pixels = binary.histogram()[255]
     change_ratio = changed_pixels / total_pixels if total_pixels > 0 else 0
+    if not changed_pixels:
+        return curr_rgb, change_ratio, []
 
     # Find bounding boxes of changed regions using connected components
     # Use a simple approach: dilate then find bounding box of non-zero regions
@@ -116,10 +118,10 @@ def _find_change_regions(binary: Image.Image, min_size: int = 20) -> list[tuple]
             continue
 
         # BFS to find connected component
-        queue = [cell]
+        queue = deque([cell])
         component = []
         while queue:
-            c = queue.pop(0)
+            c = queue.popleft()
             if c in visited or c not in active_cells:
                 continue
             visited.add(c)

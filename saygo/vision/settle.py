@@ -34,30 +34,35 @@ _DIFF_WIDTH = 360
 _PIXEL_THRESHOLD = 30
 
 
-def _prep(png: bytes) -> Image.Image:
-    """PNG bytes → 去状态栏 + 缩小的 RGB 图，供快速帧间差用。"""
-    im = Image.open(io.BytesIO(png)).convert("RGB")
-    w, h = im.size
-    top = int(h * STATUS_BAR_FRAC)          # 裁掉顶部状态栏带（噪声 mask）
-    im = im.crop((0, top, w, h))
-    w2, h2 = im.size
-    if w2 > _DIFF_WIDTH:
-        im = im.resize((_DIFF_WIDTH, max(1, int(h2 * _DIFF_WIDTH / w2))))
-    return im
+def _prep(png: bytes) -> Image.Image | None:
+    """PNG bytes → 去状态栏 + 缩小的 RGB 图；无效帧保留为 None。"""
+    try:
+        with Image.open(io.BytesIO(png)) as source:
+            im = source.convert("RGB")
+        w, h = im.size
+        top = int(h * STATUS_BAR_FRAC)      # 裁掉顶部状态栏带（噪声 mask）
+        im = im.crop((0, top, w, h))
+        w2, h2 = im.size
+        if w2 > _DIFF_WIDTH:
+            im = im.resize((_DIFF_WIDTH, max(1, int(h2 * _DIFF_WIDTH / w2))))
+        return im
+    except Exception:
+        return None
 
 
 def _change_ratio(a_png: bytes, b_png: bytes) -> float:
     """两帧变化像素占比（0-1）。histogram 走 C 层，比逐像素 Python 循环快得多。"""
-    try:
-        a, b = _prep(a_png), _prep(b_png)
-    except Exception:
+    return _prepared_change_ratio(_prep(a_png), _prep(b_png))
+
+
+def _prepared_change_ratio(a: Image.Image | None, b: Image.Image | None) -> float:
+    """Compare already prepared frames without decoding either PNG again."""
+    if a is None or b is None:
         return 1.0                          # 解析失败当"变了"，宁可多等
     if a.size != b.size:
         b = b.resize(a.size)
     diff = ImageChops.difference(a, b).convert("L")
-    binary = diff.point(lambda p: 255 if p > _PIXEL_THRESHOLD else 0)
-    hist = binary.histogram()               # hist[255] = 变化像素数
-    changed = hist[255] if len(hist) > 255 else 0
+    changed = sum(diff.histogram()[_PIXEL_THRESHOLD + 1:])
     total = a.size[0] * a.size[1]
     return changed / total if total else 0.0
 
@@ -78,6 +83,7 @@ def wait_settled(platform, timeout_s: float = 6.0, interval: float = 0.3,
         return False, frames
 
     t0 = time.monotonic()
+    previous = None
     stable_run = 0
     while time.monotonic() - t0 < timeout_s:
         time.sleep(max(0.0, interval))
@@ -86,7 +92,11 @@ def wait_settled(platform, timeout_s: float = 6.0, interval: float = 0.3,
         except Exception as e:
             log.debug("settle 轮询截图失败: %s", e)
             break
-        r = _change_ratio(frames[-1], cur)
+        if len(frames) == 1:
+            previous = _prep(frames[0])
+        current = _prep(cur)
+        r = _prepared_change_ratio(previous, current)
+        previous = current
         frames.append(cur)
         if r < STABLE_CHANGE_RATIO:
             stable_run += 1
@@ -116,10 +126,9 @@ def sample_then_frames(frames: list[bytes]) -> tuple[list[bytes], bool]:
     first, steady = frames[0], frames[-1]
     mid = frames[len(frames) // 2]
     three = [first, mid, steady]
-    max_r = 0.0
-    for i in range(len(three)):
-        for j in range(i + 1, len(three)):
-            max_r = max(max_r, _change_ratio(three[i], three[j]))
-    if max_r < STATIC_ROUTE_RATIO:
-        return [steady], False              # 静态 → 只送稳态
-    return three, True                      # 动态 → 首/中/稳
+    prepared = [_prep(frame) for frame in three]
+    for i in range(len(prepared)):
+        for j in range(i + 1, len(prepared)):
+            if _prepared_change_ratio(prepared[i], prepared[j]) >= STATIC_ROUTE_RATIO:
+                return three, True         # 动态 → 首/中/稳
+    return [steady], False                  # 静态 → 只送稳态

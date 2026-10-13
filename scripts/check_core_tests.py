@@ -6,7 +6,7 @@ import sys
 import tempfile
 
 SUITES = ('control_demo', 'runtime_demo', 'desktop_demo', 'cli_demo',
-          'mobile_demo', 'browser_demo', 'extension_demo')
+          'mobile_demo', 'browser_demo', 'extension_demo', 'vision_demo')
 
 
 def main():
