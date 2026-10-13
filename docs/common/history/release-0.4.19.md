@@ -4,10 +4,10 @@
 推送、升级版本并发布 PyPI。该授权不代表用户安装环境已经升级，也不把包发布、
 桌面构建和扩展商店审核混为同一结果。
 
-本文先记录已完成的源码验证，发布与安装结果在实际执行后补充。版本元数据已
-更新为 0.4.19，更新后核心回归、本地构建及 Linux 干净安装通过；标签、最终
-推送、CI 三平台验证及公共索引验证仍待执行，不能声称已发布。本轮仅发布 PyPI，不创建 GitHub 公开 Release、不构建
-新桌面包、不向扩展商店上传。
+0.4.19 已于 2026-10-14 01:16（UTC+8）发布到 PyPI；源码、标签、公开索引
+和下载哈希已核实。发布后完整白名单审计发现既有插件打包遗漏，详见下文；
+用户已授权在 0.4.20 补齐，不能将本版包完整性称为全部通过。本轮仅发布
+PyPI，不创建 GitHub 公开 Release、不构建新桌面包、不向扩展商店上传。
 
 ## 相对 0.4.18 的完整变更范围
 
@@ -72,7 +72,8 @@ site-packages；用户实际输入确认与 Agent 自动注入分开记录，业
 在真实 Playwright 检查中失败，因此 build、smoke 和 publish 均未执行。
 四项真实扩展测试通过，但旧 Playwright 用例在 workflow 暂停后仍通过
 `device_session.attach_browser` 改变选页，被新增的持久接管保护正确拒绝；
-本地独立 Chromium 也复现了同一错误。
+本地独立 Chromium 也复现了同一错误（1 项失败，18.405 秒）。修正后的
+相同测试通过（1 项，29.192 秒）。
 
 修正只涉及验证：用例先断言自动连接被拒绝，再经独立原生 Playwright/CDP
 模拟外部页面变化，检查原绑定、暂停状态及 resume 的新观察。它是自动化模拟，
@@ -83,18 +84,64 @@ site-packages；用户实际输入确认与 Agent 自动注入分开记录，业
 `tests/browser_demo/test_playwright_live.py`；产品源码与独立构建 job 仍使用
 不可变 `v0.4.19`。没有移动标签、追加产品版本或跳过回归/安装门禁。
 
+## 最终 CI 验证
+
+[Python package 流程 38436357328](https://github.com/WilliamSkyWalker/saygo/actions/runs/38436357328)
+由验证提交 `c7e633a` 手动运行，`release_tag=v0.4.19`。源码与构建均使用
+`5db3c91`；浏览器验证日志确认仅覆盖上述一个测试文件。
+
+| 项目 | 实际结果 |
+| --- | --- |
+| 核心回归 | `scripts/check_core_tests.py`：1,050 项，1,043 通过、7 跳过、0 失败；CI 安装 Qt，较本地多执行 9 项桌面离线测试 |
+| 扩展 JavaScript | `node --test tests/extension_demo/test_*.mjs`：51 通过、0 跳过 |
+| Windows 桥接 | `test_bridge.py` 17 项与 `test_shared_bridge.py` 14 项全部通过 |
+| MCP SDK 兼容 | 1.2.0/Pydantic 2.13.5 与 2.3.0/Pydantic 2.14.1 的 device/full stdio 握手、工具集、输入 schema、request query 均通过 |
+| 真实扩展/浏览器 | 独立 Chromium：扩展/native host/后台截图滚动 4 项通过（195.323 秒）；Playwright 1 项通过（17.587 秒），均无跳过 |
+| 构建附加回归 | 安装 33、升级 14、桥接 17，共 64 项通过；构建 job 的 Node 51 项也通过 |
+
+CI 的 browser 外部操作模拟不是 Android 人工输入证据，三平台包安装也不是
+iOS/Android/桌面完整业务验收；这些边界继续按各节分别记录。
+
 ## 0.4.19 发布与安装状态
 
 | 项目 | 当前状态 |
 | --- | --- |
-| 源码提交、推送、标签 | 输入修复提交 `f1cb82f` 已完成并核对正文；版本提交、推送及标签待执行 |
-| wheel / sdist / 发布白名单与校验 | 本地 `python -m build` 从 sdist 构建 wheel、`twine check --strict` 均通过；已核验修复源码完整且无会话/截图/私有测试；CI 最终产物待核实 |
-| 干净环境安装与重复 setup | 本地 Linux `scripts/check_python_package.py` 通过：独立环境 wheel 安装、CLI/setup、内嵌资源/MCP 导入及重复 prepare-only setup；CI Linux/Windows/macOS 待执行 |
-| PyPI | 待发布；wheel/sdist、未撤回状态、下载哈希与 simple 索引均需实际核实 |
+| 源码提交、推送、标签 | 输入修复 `f1cb82f`、版本与发布准备 `5db3c91`、浏览器验证修正 `c7e633a` 均已推送；不可变 `v0.4.19` 指向 `5db3c91`，核对远端一致 |
+| wheel / sdist / 发布白名单与校验 | 构建、`twine check --strict`、RECORD 和隐私路径排除通过；CI 与公开文件哈希一致，8 个输入修复文件完整，全部实际打包源码逐字节对应标签；完整源码白名单缺 3 个既有插件文件，详见下文 |
+| 干净环境安装与重复 setup | CI Ubuntu 24.04.5 x64/Python 3.11.17、Windows Server 2025 x64/Python 3.11.9、macOS 26.6.2 arm64/Python 3.11.9 全部通过；公开下载 wheel 在隔离 Linux 环境再次通过 CLI/setup、资源/MCP 导入及重复 prepare-only setup。旧检查未覆盖缺失的插件辅助脚本 |
+| PyPI | [0.4.19](https://pypi.org/project/saygo-agent-control/0.4.19/) wheel/sdist 已公开、均未撤回；版本 JSON、simple 索引及实际下载哈希一致，核实当时 latest 为 0.4.19 |
 | GitHub 产物 | 本轮不创建公开 Release；发布标签与 Python 流程产物不等于 GitHub Release 附件 |
 | 桌面包 | 本轮不构建或发布；0.4.18 桌面包不会自动包含本轮源码修复 |
 | 浏览器扩展与商店 | 包内源码含网络计数修复，manifest 仍为 0.4.17；本轮不上传商店，不将旧商店审核结果计为修复已上线，也不主动重载在线扩展 |
 | 用户安装环境 | 仍为正式安装版 0.4.18，未修改 site-packages、未直接升级；源码验收不代表安装版已修复 |
+
+## 公开产物核对与打包限制
+
+| 文件 | 字节数 | SHA256 |
+| --- | ---: | --- |
+| `saygo_agent_control-0.4.19-py3-none-any.whl` | 1064638 | `6844ab609b6ae9c971d1cbbe7febd3d9338c71484e71e0cf2dcb4791e53cae92` |
+| `saygo_agent_control-0.4.19.tar.gz` | 563920 | `4580c10a7aa4ece024cf1a55668a0979411dc4b3bc1f9c47f3d7630152938423` |
+
+CI artifact、PyPI JSON、simple 索引及实际公开下载的两份文件哈希均一致。
+所有实际打包源码使用 Git 原始 blob 比较，避免本机 CRLF 签出设置影响判断。
+wheel、sdist 与内嵌 setup 源码均完整包含本轮 8 个输入法/接管修复文件。
+
+完整发布源码白名单核对未通过：`MANIFEST.in` 的插件规则仅收集 Markdown/JSON，
+sdist 及其构建的 wheel 内嵌源码遗漏以下三项，0.4.18 同样存在该规则：
+
+- `plugins/saygo-device/LICENSE`
+- `plugins/saygo-device/scripts/doctor.py`
+- `plugins/saygo-device/scripts/saygo_mcp.py`
+
+托管安装会重写 `.mcp.json` 和 Claude manifest 的启动配置，因此缺少旧 launcher
+不阻断已验证的托管 MCP 导入/启动配置。插件 `doctor` 命令仍引用缺失的
+`doctor.py`，不能把现有安装 smoke 通过解释为该命令已可用；普通 CLI
+`saygo doctor` 不依赖这个插件脚本。本轮没有实际运行 Claude 中的该命令。
+用户随后授权补齐文件并升到 0.4.20，进展见[下一版记录](release-0.4.20.md)。
+
+推送标签时临时暂停了会额外创建 GitHub Release/上传扩展商店的 `release.yml`，
+随后已恢复 `active`；核实该标签无此流程运行，也无 GitHub 公开 Release。
+Python 发布门禁始终启用，首次失败后按修正的验证脚本重新完整执行。
 
 ## 迁移与剩余限制
 
