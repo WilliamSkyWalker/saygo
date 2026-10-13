@@ -76,8 +76,9 @@ class Store:
                    (run_id, time.time(), kind, json.dumps(data)))
 
     def events(self, run_id):
-        self.get(run_id)
         with self.connect() as db:
+            if db.execute("SELECT 1 FROM runs WHERE id=?", (run_id,)).fetchone() is None:
+                raise ValueError(f"unknown run: {run_id}")
             rows = db.execute("SELECT seq,at,kind,data FROM events WHERE run_id=? ORDER BY seq", (run_id,)).fetchall()
         return [dict(seq=s, at=t, kind=k, data=json.loads(d)) for s, t, k, d in rows]
 

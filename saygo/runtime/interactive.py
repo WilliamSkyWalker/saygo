@@ -12,6 +12,20 @@ from .locking import resource_guard, session_keys, reserve, release
 from .store import Store
 
 
+def _timeline_from_events(run_id, events):
+    rows = []
+    for event in events:
+        data = event["data"]
+        row = {key: event[key] for key in ("seq", "at", "kind")}
+        row.update({key: data[key] for key in (
+            "step", "resource", "error", "note", "path", "outcome", "operation", "window_id",
+        ) if key in data})
+        if event["kind"] == "action_dispatching":
+            row["action"] = data["action"].get("type")
+        rows.append(row)
+    return {"task_id": run_id, "timeline": rows}
+
+
 def default_store():
     import os
     from saygo.platforms import device_session as ds
@@ -253,26 +267,19 @@ class InteractiveRuntime(Runtime):
             return state
 
     def timeline(self, run_id):
-        rows = []
-        for event in self.store.events(run_id):
-            data = event["data"]
-            row = {key: event[key] for key in ("seq", "at", "kind")}
-            row.update({key: data[key] for key in ("step", "resource", "error", "note", "path", "outcome", "operation", "window_id") if key in data})
-            if event["kind"] == "action_dispatching":
-                row["action"] = data["action"].get("type")
-            rows.append(row)
-        return {"task_id": run_id, "timeline": rows}
+        return _timeline_from_events(run_id, self.store.events(run_id))
 
     def export(self, run_id, out):
         with self.store.guard(run_id):
             state = self.store.get(run_id)
             if state.get("mode") != "interactive":
                 raise ValueError("Expected an interactive task")
+            events = self.store.events(run_id)
             path = Path(out).expanduser().resolve()
             with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
                 archive.writestr("task.json", json.dumps(state, ensure_ascii=False, indent=2))
-                archive.writestr("events.json", json.dumps(self.store.events(run_id), ensure_ascii=False, indent=2))
-                archive.writestr("timeline.json", json.dumps(self.timeline(run_id), ensure_ascii=False, indent=2))
+                archive.writestr("events.json", json.dumps(events, ensure_ascii=False, indent=2))
+                archive.writestr("timeline.json", json.dumps(_timeline_from_events(run_id, events), ensure_ascii=False, indent=2))
                 directory = self.store.root / "artifacts" / run_id
                 if directory.exists():
                     for artifact in sorted(directory.glob("*.png")):

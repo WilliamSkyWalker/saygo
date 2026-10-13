@@ -105,6 +105,8 @@ Appium 输入异常不再切换输入方法重发；device 与 QA 使用独立�
 
 交互任务与声明式工作流保存派发前 `action_dispatching.before`、派发后 `action_evidence` 或截图错误；Agent 说明另存为 `agent_annotation`。导出包含状态、事件和截图，可能含应用资料、输入内容和消息，应按对应业务数据管理。
 
+交互任务的 ZIP 包包含 `task.json`、`events.json`、`timeline.json` 和 `artifacts/*.png`。事件列表与时间线使用同一次历史读取；导出保留待核对状态，不会核对或重放动作。
+
 ## 诊断与修复
 
 `saygo doctor --session NAME` 默认只检查连接、截图和图像解码；只有明确提供 `--probe-action` 才验证输入，且结果仍需视觉核验。
