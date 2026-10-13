@@ -293,7 +293,9 @@ def attach_desktop(state, *, serial=None, foreground=False, window_id=None):
             raise
     options = {"app": state["app"], "launch": ""}
     options.update({key: state[key] for key in ("launch", "process_name", "process_id", "new_window", "new_window_args", "background", "input_binding") if key in state})
-    if kind == "mac" and state.get("background") and state.get("window_id"):
+    if kind == "mac" and serial is not None and not state.get("window_id"):
+        raise ValueError("Legacy macOS session lacks window identity; explicitly reconnect before operating")
+    if kind == "mac" and state.get("window_id"):
         options["window_id"] = state["window_id"]
     if foreground:
         if kind != "windows":

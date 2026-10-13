@@ -28,6 +28,7 @@ _EOI = b"\xff\xd9"   # End Of Image
 
 _READ_CHUNK = 65536
 _CONNECT_TIMEOUT = 5
+_MAX_FRAME_AGE_S = 0.5
 
 
 class MjpegFrameReader:
@@ -36,6 +37,7 @@ class MjpegFrameReader:
     def __init__(self, url: str):
         self._url = url
         self._latest: bytes | None = None
+        self._latest_at: float | None = None
         self._lock = threading.Lock()
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -53,12 +55,21 @@ class MjpegFrameReader:
         return got
 
     def latest(self) -> bytes | None:
-        """当前最新 JPEG 帧字节，无则 None。"""
+        """只返回半秒内收到的帧；停止或断流时不得复用缓存。"""
         with self._lock:
+            if (self._stop.is_set() or self._latest_at is None
+                    or time.monotonic() - self._latest_at > _MAX_FRAME_AGE_S):
+                return None
             return self._latest
+
+    def _invalidate(self) -> None:
+        with self._lock:
+            self._latest = None
+            self._latest_at = None
 
     def stop(self) -> None:
         self._stop.set()
+        self._invalidate()
         # 线程是 daemon，不 join 太久，避免 teardown 卡住
         t = self._thread
         if t is not None:
@@ -74,6 +85,7 @@ class MjpegFrameReader:
                 self._read_stream()
                 backoff = 0.5  # 正常读到过就重置退避
             except Exception as e:
+                self._invalidate()
                 if self._stop.is_set():
                     break
                 log.debug("mjpeg 流中断，%.1fs 后重连: %s", backoff, e)
@@ -105,6 +117,9 @@ class MjpegFrameReader:
                     frame = buf[soi:eoi + 2]
                     buf = buf[eoi + 2:]
                     with self._lock:
+                        if self._stop.is_set():
+                            return
                         self._latest = frame
+                        self._latest_at = time.monotonic()
                     if not self._first_frame.is_set():
                         self._first_frame.set()

@@ -81,12 +81,22 @@ class DesktopMacPlatform(DesktopPlatform):
         pyautogui.FAILSAFE = False
         self._pg, self._Q, self._AK = pyautogui, Quartz, AppKit
 
-        app = (config.get("mac", {}) or {}).get("app", "").strip()
+        options = config.get("mac", {}) or {}
+        app = options.get("app", "").strip()
         if not app:
             raise RuntimeError(
                 "跑 mac 平台必须指定被测 App —— 在 .env 配 MAC_APP=<应用名>，"
                 "或 `MAC_APP=Calculator python3 -m saygo.cli run … --platform mac`。")
         self._app_name = app
+        self._pid = int(options.get("process_id") or 0)
+        self._win_id = int(options.get("window_id") or 0)
+
+        if self._win_id or self._pid:
+            found = self._find_window()
+            if not found:
+                raise RuntimeError("Bound window disappeared; explicitly reconnect to a selected window")
+            self._apply_window(found)
+            return
 
         # 启动/前置 App，再等它的窗口出现
         self._open_app(app)
@@ -119,20 +129,30 @@ class DesktopMacPlatform(DesktopPlatform):
             log.warning("open %s 失败: %s", app, e)
 
     def _find_window(self):
-        """按 ownerName 找被测 App 的主窗口（layer==0，面积最大）。返回 window info dict 或 None。"""
+        """已绑定窗口严格匹配；首次连接有多个候选时要求明确选择。"""
         Q = self._Q
         wins = Q.CGWindowListCopyWindowInfo(Q.kCGWindowListOptionAll, Q.kCGNullWindowID)
-        best, best_area = None, -1
+        candidates = []
         for w in wins or []:
             if w.get("kCGWindowOwnerName") != self._app_name:
                 continue
             if int(w.get("kCGWindowLayer", 0)) != 0:   # 排除菜单/dock/浮层
                 continue
+            if self._pid and int(w.get("kCGWindowOwnerPID", 0)) != self._pid:
+                continue
+            if self._win_id and int(w.get("kCGWindowNumber", 0)) != self._win_id:
+                continue
             b = w.get("kCGWindowBounds") or {}
             area = float(b.get("Width", 0)) * float(b.get("Height", 0))
-            if area > best_area:
-                best, best_area = w, area
-        return best
+            if area > 0:
+                candidates.append(w)
+        if len(candidates) > 1:
+            raise RuntimeError("Multiple windows found; select an explicit --window-id")
+        return candidates[0] if candidates else None
+
+    @property
+    def connection(self):
+        return {"process_id": self._pid, "window_id": str(self._win_id)}
 
     def _apply_window(self, w) -> None:
         b = w["kCGWindowBounds"]
@@ -162,11 +182,11 @@ class DesktopMacPlatform(DesktopPlatform):
 
     def screenshot_raw(self) -> bytes:
         """截被测 App 窗口（先保前台 + 刷新窗口 bounds）。返回 PNG bytes。"""
-        self._ensure_frontmost()
         w = self._find_window()
         if w is None:
             raise RuntimeError(f"被测 App「{self._app_name}」窗口消失（可能已退出/最小化）。")
         self._apply_window(w)
+        self._ensure_frontmost()
 
         Q, AK = self._Q, self._AK
         img = Q.CGWindowListCreateImage(

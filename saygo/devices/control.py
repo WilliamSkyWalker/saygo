@@ -115,8 +115,10 @@ def _connect(args):
             value=getattr(args,key,None)
             if value: state[key]=value
         if getattr(args, "window_id", None) is not None:
-            if kind != "mac" or not state.get("background"):
-                raise ValueError("Connection --window-id requires macOS --background")
+            if kind != "mac":
+                raise ValueError("Connection --window-id requires macOS")
+            # An explicit selection is the only operation allowed to replace a stale binding.
+            state.pop("process_id", None)
             state["window_id"] = args.window_id
         if kind != "windows" and any(state.get(k) for k in ("launch", "process_name", "new_window")):
             raise ValueError("Explicit desktop lifecycle options currently require Windows")
@@ -134,7 +136,7 @@ def _connect(args):
             if not isinstance(connection,dict): connection={}
             for key in ("process_id", "process_name", "launch"):
                 if connection.get(key): state[key]=connection[key]
-            if kind == "mac" and state.get("background"):
+            if kind == "mac":
                 state["window_id"] = connection["window_id"]
             # New-window intent is one-shot, never repeated by screenshots/actions.
             state.pop("new_window",None); state.pop("new_window_args",None)
@@ -234,7 +236,7 @@ def register(sub):
     p.add_argument("--app")
     p.add_argument("--desktop-scope", choices=["window", "computer"], default="window")
     p.add_argument("--background",action="store_true",help="Windows/macOS background capture and directed input; never fall back to global input")
-    p.add_argument("--window-id",help="Bind a specific existing macOS background window")
+    p.add_argument("--window-id",help="Bind a specific existing macOS window")
     p.add_argument("--process",dest="process_name",help="Windows executable process name")
     p.add_argument("--launch",help="Windows executable; launched only if no matching process exists")
     p.add_argument("--new-window",action="store_true",help="Explicitly request another window")
@@ -248,6 +250,8 @@ def register(sub):
     for name in ("open","scroll"):
         p=sub.add_parser(name)
         p.add_argument("--session","--serial",dest="serial",required=True)
+        p.add_argument('--observation-id', required=True)
+        p.add_argument('--request-id')
         if name=="open": p.add_argument("target")
         else: p.add_argument("direction",choices=["up","down"])
     p=sub.add_parser("handoff",help="Pause any session for login or other user interaction")

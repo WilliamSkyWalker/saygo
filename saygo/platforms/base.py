@@ -3,6 +3,10 @@
 from abc import ABC, abstractmethod
 
 
+class ActionOutcomeUnknown(RuntimeError):
+    """Input may have reached the target; callers must not retry automatically."""
+
+
 class Platform(ABC):
 
     # --- Lifecycle ---

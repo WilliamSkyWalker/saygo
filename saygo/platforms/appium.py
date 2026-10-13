@@ -25,7 +25,7 @@ from PIL import Image
 
 from saygo.vision.grid import draw_coordinate_grid, img_to_png_bytes
 from ..logger import get_logger
-from .base import Platform
+from .base import ActionOutcomeUnknown, Platform
 
 log = get_logger("appium")
 
@@ -34,7 +34,7 @@ _ANDROID_PROMPT_SEGMENT = """你正在操作一个 Android 设备来执行测试
 可用操作类型：
 - tap: {"x_pct": 0-100, "y_pct": 0-100, "target": "被点元素的简短描述"}  — 点击(百分比坐标,相对截图宽/高)
 - swipe: {"x1_pct": .., "y1_pct": .., "x2_pct": .., "y2_pct": ..}  — 滑动(百分比)
-- swipe_up / swipe_down  — 上/下滚动
+- scroll_up / scroll_down — 视口向页面顶部/底部滚动（不是手指移动方向）
 - input: {"text": "string"}  — 输入文字
 - press_key: {"key": "enter|delete|tab|space|escape|back|home|recent"}
 - open_app: {"package": "string"}  — 打开 App（包名）
@@ -54,7 +54,7 @@ _IOS_PROMPT_SEGMENT = """你正在操作一个 iOS 设备来执行测试用例�
 可用操作类型：
 - tap: {"x_pct": 0-100, "y_pct": 0-100, "target": "被点元素的简短描述"}  — 点击(百分比坐标,相对截图宽/高)
 - swipe: {"x1_pct": .., "y1_pct": .., "x2_pct": .., "y2_pct": ..}  — 滑动(百分比)
-- swipe_up / swipe_down  — 上/下滚动
+- scroll_up / scroll_down — 视口向页面顶部/底部滚动（不是手指移动方向）
 - input: {"text": "string"}  — 输入文字（需先点中输入框聚焦）
 - press_key: {"key": "enter|delete|home"}
 - open_app: {"bundle_id": "string"}  — 打开 App
@@ -273,8 +273,8 @@ class AppiumPlatform(Platform):
         """无 grid 截图（LLM 输入 + 报告都用这个）。
 
         优先取 mjpeg 常驻流的最新帧（省 HTTP 往返 + 设备端截图编码）；取不到帧
-        （未启用 / 尚未就绪 / 断流）则无条件 fallback 到 driver.get_screenshot_as_png，
-        故 mjpeg 只快不错。mjpeg 帧是 JPEG，转 PNG 让下游 mime 与原路径一致。
+        （未启用 / 尚未就绪 / 断流 / 帧已过期）则回落 driver.get_screenshot_as_png。
+        mjpeg 帧是 JPEG，转 PNG 让下游 mime 与原路径一致。
         """
         if self._mjpeg is not None:
             frame = self._mjpeg.latest()
@@ -357,11 +357,11 @@ class AppiumPlatform(Platform):
 
     def scroll_up(self) -> None:
         cx, h = self._screen_width // 2, self._screen_height
-        self._w3c_swipe(cx, h * 3 // 4, cx, h // 4)
+        self._w3c_swipe(cx, h // 4, cx, h * 3 // 4)
 
     def scroll_down(self) -> None:
         cx, h = self._screen_width // 2, self._screen_height
-        self._w3c_swipe(cx, h // 4, cx, h * 3 // 4)
+        self._w3c_swipe(cx, h * 3 // 4, cx, h // 4)
 
     def input_text(self, text: str) -> None:
         """向当前聚焦的输入框写文字。
@@ -370,29 +370,18 @@ class AppiumPlatform(Platform):
         io.appium.settings 提供）真 IME 提交。IME 对「聚焦的输入框」提交文字，
         **不管是原生 EditText 还是 Flutter 自绘都通吃**，且支持 CJK；比只对原生有效的
         ACTION_SET_TEXT 更普适，故原生/Flutter 不分叉。
-        iOS：聚焦元素 send_keys / mobile: keys。
+        iOS：聚焦元素 send_keys。任一输入派发异常均不换路径重发。
         """
         if not text:
             return
-        if self._os == "android":
-            try:
-                self._driver.execute_script("mobile: type", {"text": text})
-                return
-            except Exception as e:
-                log.debug("mobile: type 失败，试 active_element: %s", e)
-        # 兜底 / iOS：聚焦元素 send_keys
         try:
-            self._driver.switch_to.active_element.send_keys(text)
-            return
+            if self._os == "android":
+                self._driver.execute_script("mobile: type", {"text": text})
+            else:
+                self._driver.switch_to.active_element.send_keys(text)
         except Exception as e:
-            log.debug("active_element send_keys 失败: %s", e)
-        if self._os == "ios":
-            try:
-                self._driver.execute_script("mobile: keys", {"keys": list(text)})
-                return
-            except Exception as e:
-                log.warning("iOS mobile: keys 失败: %s", e)
-        raise RuntimeError("input_text failed; focus an input field before typing")
+            raise ActionOutcomeUnknown(
+                "Input outcome unknown; observe and review before sending new input") from e
 
     def press_key(self, key: str) -> None:
         if self._os == "android":

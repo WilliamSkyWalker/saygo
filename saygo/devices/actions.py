@@ -3,18 +3,24 @@ import math
 from pathlib import Path
 from . import observations
 
-BASE = {"tap", "swipe", "input", "press_key", "scroll_up", "scroll_down", "open_url", "open_app"}
+BASE = {"tap", "swipe", "input", "press_key", "scroll_up", "scroll_down"}
 OPTIONAL = {"hover", "double_click", "right_click", "long_press", "scroll_at", "hotkey"}
 
 
 def capabilities(platform):
     actions = BASE | {name for name in OPTIONAL if callable(getattr(type(platform), name, None))}
+    kind = getattr(platform, 'platform_name', None)
+    if kind == 'browser':
+        actions.add('open_url')
+    elif kind in {'android', 'ios', 'mac', 'windows', 'desktop', 'rdp'}:
+        actions.add('open_app')
     if callable(getattr(type(platform), "supported_actions", None)):
         actions = set(platform.supported_actions())
     if callable(getattr(type(platform), "list_pages", None)):
         actions |= {"select_page", "close_page", "new_page", "go_back", "go_forward"}
     result = {"actions": sorted(actions), "coordinate_spaces": ["screen", "percent", "image", "crop"],
-              "business_verification": "external_agent", "scroll_at_unit": "wheel_notches"}
+              "business_verification": "external_agent", "scroll_at_unit": "wheel_notches",
+              "scroll_direction": "viewport", "scroll_up": "toward_top", "scroll_down": "toward_bottom"}
     if getattr(platform, 'platform_name', None) == 'browser' and 'scroll_at' in actions:
         result.update(scroll_at_pixels_per_unit=100, scroll_at_positive_direction='up',
                       scroll_at_fractional=True)

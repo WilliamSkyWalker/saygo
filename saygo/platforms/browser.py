@@ -11,7 +11,6 @@ from PIL import Image
 from saygo.vision.grid import draw_coordinate_grid, img_to_png_bytes
 from ..logger import get_logger
 from .base import Platform
-from .selenium_grid import cleanup_grid_sessions
 from saygo.devices.scrolling import SCROLL_GUIDANCE
 
 log = get_logger("browser")
@@ -71,9 +70,7 @@ class BrowserPlatform(Platform):
         grid_url = browser_cfg.get("grid_url", "")
 
         if grid_url:
-            # Clean up stale sessions unless caller already did it
-            if not browser_cfg.get("_skip_grid_cleanup"):
-                cleanup_grid_sessions(grid_url)
+            # Shared Grid sessions belong to their creators; never clean them at startup.
             # Remote — Selenium Grid / Hub
             self._driver = self._create_remote_driver(webdriver, browser_type,
                                                        headless, grid_url)
