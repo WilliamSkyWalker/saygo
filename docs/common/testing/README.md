@@ -23,6 +23,7 @@ python3 -m unittest discover -s tests/control_demo -p test_updates_package.py -v
 | 观察与动作 | control_demo 的 agent_service/control/requirements | 各端实际截图、输入及结果 |
 | 任务/工作流 | runtime_demo 的持久化、去重、恢复、SQLite | 指定跨端业务与断连恢复 |
 | QA | cli_demo 的解析、执行、证据与命令 | 独立测试目标及模型调用 |
+| 截图计算 | vision_demo 的阈值、状态栏遮罩、帧复用、采样路由和差异区域 | 实际设备截图时延、动画及短暂提示捕获 |
 | 非视觉断言 | 指令、JSON、裸参数、用例检出 | 自有数据库/日志与授权数据 |
 | 桌面产品 | [桌面回归](desktop.md) | 原生系统权限、真实模型任务 |
 | MCP/安装 | control_demo 的后端限制、插件/发布安装 | 客户端真实加载、干净环境及重复 setup |
@@ -39,6 +40,19 @@ python3 scripts/check_core_tests.py
 ```
 
 该脚本分进程和临时状态运行各套件，关闭真实设备测试开关；Qt 使用 offscreen。环境跳过不是通过。真实浏览器另用 scripts/check_browser_tests.py 及对应主机依赖，不将模拟扩展 IPC 当 Chrome 验收。
+
+用例发现、截图与历史查询的定向回归：
+
+```sh
+python3 -m unittest discover -s tests/cli_demo -p test_cases.py -v
+python3 -m unittest discover -s tests/vision_demo -v
+python3 -m unittest discover -s tests/runtime_demo -p test_history.py -v
+python3 scripts/benchmark_core_paths.py
+```
+
+基准脚本只使用临时目录、合成截图和 SQLite，不连接设备或模型；输出中位数，不设置容易受机器负载影响的耗时断言。回归测试检查结果和重复扫描/解码/读取次数。工作负载及实测边界见[性能记录](../performance.md)。
+
+2026-10-13 源码重构验证：Linux x86_64 / WSL2、Python 3.12.3 下执行 `python3 scripts/check_core_tests.py`，共 985 项，969 通过、16 跳过、0 失败；其中新增 17 项回归全部通过。跳过项为 9 项缺少 PySide6 的 Qt 检查、2 项 Windows 实机、1 项 Playwright 和 4 项真实扩展检查。需求场景生成检查、Python 语法及修改文档的本地链接检查通过。Windows、macOS、Android、iOS、真实扩展及 Playwright 均未在本轮进行端到端验收；安装环境及发布产物未更新。
 
 ## 证据标准
 

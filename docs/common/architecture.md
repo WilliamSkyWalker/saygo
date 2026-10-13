@@ -38,6 +38,10 @@ platforms.desktop 共享指针、滚动、按键别名、剪贴板输入和长�
 
 platforms.device_session.release_controller 负责临时控制器释放：桌面释放、Playwright/扩展断开、Selenium 临时服务清理，同时保留持久会话。QA Grid 的共享清理在 platforms.selenium_grid.cleanup_grid_sessions。
 
+vision.settle 在一次稳定等待中复用上一帧的预处理图，断言采样对首/中/末三帧各预处理一次；缓存仅限本次调用，返回的仍是原始截图。skills.visual_diff 用直方图统计变化，零变化时直接返回当前 RGB 图，区域聚合使用队列。阈值、状态栏遮罩与尺寸对齐语义保持一致。
+
+runtime.store.events 只查询任务是否存在并读取事件，不加载完整 checkpoint。interactive 的时间线格式化共用 _timeline_from_events；导出包中的事件和时间线来自同一次事件读取。写入事务、执行锁、意图持久化和数据库结构保持不变。
+
 devices.mobile.provision_runtime 复用 SDK、Appium 与启动编排，mobile_host 选择本地/Windows 主机，适配器负责连接。Windows 移动 bundle 仅包含包初始化、日志、安装、工具链、worker 和隐藏控制台 Node 脚本，排除配置及凭据；tests/mobile_demo/test_bundle.py 在隔离进程检查不依赖已安装包的导入。
 
 ## 兼容入口
@@ -45,5 +49,7 @@ devices.mobile.provision_runtime 复用 SDK、Appium 与启动编排，mobile_ho
 `python -m saygo.cli`、`python -m saygo.mcp.server`、`python -m saygo.drive.render`、`python -m saygo.browser_bridge` 保留。桥实现也可通过 integrations.browser_bridge 或单文件运行。内部导入使用所属模块，不在包根目录保留旧私有辅助函数别名。
 
 CLI 只构建参数和分派命令；工作流注册保留在 runtime.cli。qa.cases 统一发现/筛选，qa.device_setup 管设备准备、APK 和重置，qa.execution 管顺序/Grid/多设备调度，共用跳过判定、空结果与平台准备逻辑。MCP 直接导入职责模块。
+
+qa.cases 复用当前目录/TESTS_DIR 的候选路径，绝对目录只遍历一次 feature 文件。账号池、前置条件和显式 Markdown 文件共用 tests 下顶层目标归属；feature 的报告目标仍由最近的 README 决定，保留原有发现优先级与外部文件行为。
 
 对应验证见[测试目录](testing/README.md)。模拟适配器或单一平台检查不能证明六端设备兼容。
