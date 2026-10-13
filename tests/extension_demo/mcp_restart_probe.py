@@ -25,7 +25,7 @@ async def exercise(root, bridge, page_id):
                 await client.initialize()
                 registered = {tool.name: tool for tool in (await client.list_tools()).tools}
                 for name in ('device_act', 'device_input', 'device_tap'):
-                    assert {'observation_id', 'request_id'} <= set(registered[name].inputSchema['properties'])
+                    assert {'observation_id', 'request_id'} <= set(registered[name].model_dump(by_alias=True)['inputSchema']['properties'])
 
                 async def call(name, arguments):
                     result = await client.call_tool(name, arguments)

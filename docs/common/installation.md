@@ -14,6 +14,8 @@ saygo setup --client codex
 # 可选 claude / both（Claude + Codex）/ qoder / qodercn / all
 ```
 
+默认安装会解析当前兼容的 MCP SDK。若维护环境明确固定 `mcp==1.2.0`，须同时使用兼容的 Pydantic；发布检查验证的组合是 `pydantic==2.13.5`。Pydantic 2.14 删除了该旧 SDK 导入的私有接口，直接组合会在 SDK 导入阶段失败。
+
 无需克隆仓库或手写 MCP 路径。setup 使用包内安装器、插件、共享 Skill 与扩展资源，MCP 直接绑定当前包的 Python 环境；客户端重启后加载工具，MCP 启动不下载依赖。
 
 Codex/Claude 使用 `saygo-device@saygo-managed` 插件；Qoder/QoderCN 配置 MCP、Skill 和服务信任。管理文件默认在 `~/.local/share/saygo/agent-plugin`，会话和任务在 `~/.saygo`。可用 `--root PATH` 指定安装目录；`--prepare-only` 只准备文件，不注册客户端或 host。

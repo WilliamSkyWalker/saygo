@@ -28,7 +28,7 @@ async def check():
                     assert set(tools) == expected, (profile, set(tools) ^ expected)
                     for name in ('device_act', 'device_tap', 'device_input', 'device_key',
                                  'device_swipe', 'device_launch', 'device_type_send'):
-                        assert {'observation_id', 'request_id'} <= set(tools[name].inputSchema['properties']), name
+                        assert {'observation_id', 'request_id'} <= set(tools[name].model_dump(by_alias=True)['inputSchema']['properties']), name
                     result = await client.call_tool('device_command', {'command': 'operations', 'session': 'example'})
                     value = next(json.loads(row.text) for row in result.content if row.type == 'text')
                     assert value == {'ok': True, 'operations': []}, value
