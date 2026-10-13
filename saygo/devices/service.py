@@ -144,13 +144,7 @@ def _execute(args):
                 plat.expect_window(before)
             _record(args.record, "dispatching", {"action": prepared, "before": before})
             dispatched = True
-            try:
-                result = actions.dispatch(plat, prepared)
-            except Exception as exc:
-                from .diagnostics import collect
-                return {"ok": False, "error": str(exc), "error_type": type(exc).__name__,
-                        "outcome": "uncertain", "requires_observation": True,
-                        "diagnostics": collect(plat, exc)}
+            result = actions.dispatch(plat, prepared)
             _record(args.record, "dispatched", result)
             if args.observe_after:
                 result["wait"] = observations.wait(plat, "stable", args.timeout)
@@ -241,6 +235,10 @@ def _execute(args):
             plat.reset_app(args.package, "relaunch" if args.force_stop else "none")
             return ({"ok": True, "package": args.package, "force_stop": args.force_stop})
     except Exception as exc:
+        # A platform can prove that input preparation failed before dispatch.
+        # type-send may already have focused the field or selected existing text.
+        if cmd != "type-send" and getattr(exc, "dispatched", None) is False:
+            dispatched = False
         error = {"ok": False, "error": str(exc), "error_type": type(exc).__name__,
                  "outcome": "uncertain" if dispatched else "not_dispatched",
                  "requires_observation": dispatched}
@@ -377,6 +375,8 @@ def execute_observed(platform, session, action, observation, keys, *, request_id
             result = result if isinstance(result, dict) else {'dispatched': True}
             result.update(ok=True, dispatched=True, business_success=None, requires_observation=True)
         except Exception as exc:
+            if getattr(exc, 'dispatched', None) is False:
+                dispatched = False
             result = {'ok': False, 'error': str(exc), 'error_type': type(exc).__name__,
                       'outcome': 'uncertain' if dispatched else 'not_dispatched',
                       'requires_observation': dispatched}

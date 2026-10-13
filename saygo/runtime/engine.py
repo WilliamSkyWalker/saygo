@@ -132,11 +132,7 @@ class Runtime:
                     self._complete(state, step, {"verified": True, "actual": actual})
                 elif step["kind"] == "human":
                     # No resource input after this checkpoint until an explicit resume.
-                    state["status"] = "waiting_for_human"
-                    state["human"] = dict(step)
-                    observation = self._observe(state, step["resource"])
-                    state["human"]["observation"] = observation
-                    self.store.save(state, "human_requested", state["human"])
+                    self._begin_handoff(state, dict(step))
                     return state
                 elif step["kind"] == "action":
                     self._action(state, step, context)
@@ -150,16 +146,54 @@ class Runtime:
                                 release=state["status"] == "failed")
                 return state
 
+    def _begin_handoff(self, state, human, *, clear_control=None):
+        state.update(status="waiting_for_human", human=human, observations={}, error=None)
+        options = {"clear_control": clear_control} if clear_control else {}
+        self.store.save(state, "human_requested", human, **options)
+        errors = []
+        if human.get("kind") == "human":
+            try:
+                # Capture before session markers block normal attachment. A failed
+                # capture must still allow every device to restore manual input.
+                human["observation"] = self._observe(state, human["resource"])
+            except Exception as exc:
+                errors.append(f"observation: {type(exc).__name__}: {exc}")
+        for name, spec in state["workflow"]["resources"].items():
+            if spec["kind"] == "sqlite":
+                continue
+            try:
+                handoff = getattr(self._resource(state, name), "handoff", None)
+                if callable(handoff):
+                    handoff(human["instructions"], state["id"])
+            except Exception as exc:
+                errors.append(f"{name}: {type(exc).__name__}: {exc}")
+        if errors:
+            state["error"] = "; ".join(errors)
+            self.store.save(state, "human_handoff_failed", {"error": state["error"]})
+        else:
+            self.store.save(state, "human_ready", human)
+
+    def _clear_session_handoffs(self, state):
+        from saygo.platforms import device_session
+        for spec in state["workflow"]["resources"].values():
+            session = spec.get("session")
+            if session:
+                binding = device_session.load_state(session) or {}
+                if binding.get("handoff", {}).get("task") == state["id"]:
+                    binding.pop("handoff")
+                    device_session.save_state(session, binding)
+
     def _control(self, state):
         command = self.store.control(state["id"])
         if command == "cancel":
+            self._clear_session_handoffs(state)
             state["status"] = "cancelled"
             self.store.save(state, "cancelled", release=True, clear_control="cancel")
             return True
         if command == "pause":
-            state["status"] = "waiting_for_human"
-            state["human"] = {"kind": "pause", "instructions": "Return control with resume after completing manual work."}
-            self.store.save(state, "human_requested", state["human"], clear_control="pause")
+            self._begin_handoff(state, {
+                "kind": "pause", "instructions": "Return control with resume after completing manual work."
+            }, clear_control="pause")
             return True
         return False
 
@@ -190,8 +224,15 @@ class Runtime:
         self.store.save(state, "action_dispatching", state["pending"])
         try:
             result = resource.execute(prepared)
-        except Exception:
-            self._action_evidence(state, step, uncertain=True)
+        except Exception as exc:
+            if getattr(exc, "dispatched", None) is False:
+                action_id = state["pending"]["id"]
+                state["pending"] = None
+                self.store.save(state, "action_not_dispatched", {
+                    "action_id": action_id, "step": step["id"], "dispatched": False,
+                    "error": f"{type(exc).__name__}: {exc}"})
+            else:
+                self._action_evidence(state, step, uncertain=True)
             raise
         self._complete(state, step, result)
         self._action_evidence(state, step)
@@ -230,9 +271,21 @@ class Runtime:
                         return state
                     # Invalidate all pre-handoff observations; reconnect and see current state.
                     state["observations"] = {}
-                    for name, spec in state["workflow"]["resources"].items():
-                        if spec["kind"] != "sqlite":
-                            self._observe(state, name)
+                    state["error"] = None
+                    self.store.save(state, "human_resume_requested", {"note": note})
+                    try:
+                        for name, spec in state["workflow"]["resources"].items():
+                            if spec["kind"] != "sqlite":
+                                resume = getattr(self._resource(state, name), "resume", None)
+                                if callable(resume):
+                                    resume(note)
+                        for name, spec in state["workflow"]["resources"].items():
+                            if spec["kind"] != "sqlite":
+                                self._observe(state, name)
+                    except Exception as exc:
+                        state.update(observations={}, error=f"{type(exc).__name__}: {exc}")
+                        self.store.save(state, "human_resume_failed", {"error": state["error"]})
+                        raise
                     human = state["human"]
                     state["human"] = None
                     state["status"] = "queued"
@@ -302,6 +355,7 @@ class Runtime:
                     release(run_id)
                     return state
                 # Keep uncertain results visible even when cancelling; no replay on cancellation.
+                self._clear_session_handoffs(state)
                 state["status"] = "cancelled"
                 self.store.save(state, "cancelled", {"unresolved_action": state["pending"]}, release=True, clear_control="cancel")
                 from .locking import release

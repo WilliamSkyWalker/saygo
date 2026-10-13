@@ -126,6 +126,51 @@ class DeviceSafetyTests(unittest.TestCase):
         self.assertFalse(result['ok'])
         self.assertEqual(self.device.calls, [])
 
+    def test_ime_preparation_failure_is_not_dispatched_for_input_and_act(self):
+        from saygo.platforms.android_ime import InputMethodError
+        for command, options in [('input', {'text': 'example'}),
+                                 ('act', {'action': {'type': 'input', 'text': 'example'}})]:
+            with self.subTest(command=command):
+                observation_id = self.observe()
+                request_id = 'ime-unavailable-' + command
+                with patch.object(self.device, 'input_text', side_effect=InputMethodError('Choose a manual keyboard')):
+                    result = service.execute(command, 'web', observation_id=observation_id,
+                                             request_id=request_id, **options)
+                self.assertFalse(result['ok'])
+                self.assertEqual(result['outcome'], 'not_dispatched')
+                self.assertFalse(result['requires_observation'])
+                # Known no-input failures release operation ownership. A new
+                # observed request can run without resolving an uncertain input.
+                next_result = service.execute('input', 'web', text='after recovery',
+                                              observation_id=self.observe())
+                self.assertTrue(next_result['ok'], next_result)
+        self.assertEqual(self.device.calls, [('input', 'after recovery')] * 2)
+
+    def test_ime_preparation_failure_in_observed_service_releases_ownership(self):
+        from saygo.platforms.android_ime import InputMethodError
+        from saygo.runtime.locking import session_keys
+        observation = service.execute('screenshot', 'web')
+        with patch.object(self.device, 'input_text', side_effect=InputMethodError('Choose a manual keyboard')):
+            result = service.execute_observed(self.device, 'web', {'type': 'input', 'text': 'example'},
+                                              observation, session_keys('web'))
+        self.assertEqual(result['outcome'], 'not_dispatched')
+        self.assertFalse(result['requires_observation'])
+        self.assertEqual(self.device.calls, [])
+        next_result = service.execute('input', 'web', text='after recovery', observation_id=self.observe())
+        self.assertTrue(next_result['ok'], next_result)
+
+    def test_ime_failure_after_type_send_focus_still_reports_prior_dispatch(self):
+        from saygo.platforms.android_ime import InputMethodError
+        observation_id = self.observe()
+        with patch.object(self.device, 'input_text', side_effect=InputMethodError('Choose a manual keyboard')), \
+                patch.object(service.time, 'sleep'):
+            result = service.execute('type-send', 'web', text='example', input_x=1, input_y=2,
+                                     prepare_only=True, observation_id=observation_id)
+        self.assertEqual(result['outcome'], 'uncertain')
+        self.assertTrue(result['requires_observation'])
+        self.assertFalse(result['submission_attempted'])
+        self.assertEqual(self.device.calls, [('tap', 1, 2)])
+
 
 if __name__ == '__main__':
     unittest.main()

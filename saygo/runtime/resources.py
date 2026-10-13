@@ -124,6 +124,34 @@ class VisualResource:
             raise PreconditionError("page management requires Playwright or extension")
         return {"pages": platform.list_pages()}
 
+    def handoff(self, instructions, owner):
+        """Use the device lifecycle while the workflow retains resource ownership."""
+        session = self.spec.get("session")
+        if not session:
+            return
+        from argparse import Namespace
+        from saygo.devices.control import _handoff
+        return _handoff(Namespace(session=session, reason="workflow", instructions=instructions,
+                                  task=owner, input_method=None))
+
+    def resume(self, note):
+        session = self.spec.get("session")
+        if not session:
+            return
+        from argparse import Namespace
+        from saygo.devices.control import _resume
+        from saygo.platforms import device_session
+        if (device_session.load_state(session) or {}).get("handoff"):
+            result = _resume(Namespace(session=session, note=note))
+            if result.get("status") != "needs_observation":
+                raise RuntimeError(f"Session {session} could not resume: {result}")
+            return result
+        # Older workflows paused only their own state; partial resumes also leave
+        # already-restored sessions without a marker. Never create a new session.
+        prepare = getattr(self._attach(), "prepare_resume", None)
+        if callable(prepare):
+            return prepare()
+
     def prepare(self, action, observation):
         """Validate all input before the durable dispatch intent is recorded."""
         platform = self._attach()

@@ -13,6 +13,7 @@ class MobileSafetyTests(unittest.TestCase):
         platform = AppiumPlatform()
         platform._os = os_name
         platform._driver = Mock()
+        platform._driver.execute.return_value = {'value': 'com.example.keyboard/.Keyboard'}
         platform._screen_width, platform._screen_height = 400, 800
         return platform
 

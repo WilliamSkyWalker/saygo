@@ -198,6 +198,8 @@ def connect(args):
     from saygo.runtime.locking import resource_guard, session_keys
     state = ds.load_state(args.session) or {}
     if state.get("handoff"):
+        if state.get("os") in {"android", "ios"}:
+            return _reconnect_mobile_handoff(args, state)
         return {"connected": False, "session": args.session, **state["handoff"]}
     keys = session_keys(args.session, state)
     if args.platform == 'browser' and (args.backend or state.get('browser_backend')) == 'extension' and not args.bridge_directory:
@@ -215,6 +217,41 @@ def connect(args):
         if current.get("handoff"):
             return {"connected": False, "session": args.session, **current["handoff"]}
         return _connect(args)
+
+
+def _reconnect_mobile_handoff(args, state):
+    """An explicit connection may repair a paused binding without resuming it."""
+    from saygo.runtime.locking import reserve, resource_guard, session_keys
+    device = state.get("device_id") or state.get("serial")
+    server = state.get("server_url", "")
+    if (args.platform != state.get("os") or not device or not server
+            or getattr(args, "device", None) not in (None, device)
+            or (getattr(args, "server_url", None)
+                and args.server_url.rstrip("/") != server.rstrip("/"))):
+        raise ValueError("Session belongs to a different device/server; use another --session")
+    owner = state["handoff"].get("task") or "human:" + args.session
+    keys = session_keys(args.session, state)
+    with resource_guard(keys, owner=owner):
+        if ds.load_state(args.session) != state:
+            raise RuntimeError("Session changed while reconnecting; inspect and retry connect")
+        reserve(owner, keys)
+        config = {"device": device, "server_url": server, "auto_start": False}
+        if getattr(args, "team_id", None):
+            config["team_id"] = args.team_id
+        plat = None
+        try:
+            plat = ds.start(args.session, state["os"], appium_config=config, allow_handoff=True)
+            plat.prepare_handoff()
+            current = ds.load_state(args.session)
+            current["handoff"].pop("error", None)
+            ds.save_state(args.session, current)
+            return {"connected": True, "session": args.session, "platform": state["os"],
+                    "device": device, "screen_size": list(plat.screen_size), **current["handoff"]}
+        except Exception as exc:
+            _handoff_error(args.session, exc)
+            raise
+        finally:
+            ds.release_controller(plat, state["os"])
 
 
 def disconnect(serial):
@@ -272,9 +309,34 @@ def _handoff(args):
     if not state:
         raise ValueError("Known session required")
     if not args.instructions.strip(): raise ValueError("Handoff instructions cannot be empty")
+    task = getattr(args, "task", None)
+    if state.get("handoff", {}).get("task") not in (None, task):
+        raise RuntimeError("Session is waiting for its owning task; use that task to resume")
     state["handoff"]={"status":"waiting_for_human","reason":args.reason,"instructions":args.instructions}
+    if task:
+        state["handoff"]["task"] = task
     ds.save_state(args.session,state)
-    return {"session":args.session,**state["handoff"]}
+    plat = None
+    try:
+        if state.get("os") in {"android", "ios"}:
+            candidate = dict(state); candidate.pop("handoff")
+            plat = ds.attach(args.session, state=candidate)
+            if plat is None:
+                raise RuntimeError("Session expired; reconnect required before keyboard recovery")
+            plat.prepare_handoff(input_method=getattr(args, "input_method", None))
+        return {"session":args.session,**(ds.load_state(args.session) or state)["handoff"]}
+    except Exception as exc:
+        _handoff_error(args.session, exc)
+        raise
+    finally:
+        ds.release_controller(plat, state.get("os") or state.get("kind"))
+
+
+def _handoff_error(session, error):
+    state = ds.load_state(session)
+    if state and state.get("handoff"):
+        state["handoff"]["error"] = str(error)
+        ds.save_state(session, state)
 
 
 def _resume(args):
@@ -283,7 +345,6 @@ def _resume(args):
     if not state or not state.get("handoff"): raise ValueError("Session is not waiting for human interaction")
     if not args.note.strip(): raise ValueError("A completion note is required")
     from saygo.platforms.desktop import DesktopHandoffRequired
-    from saygo.devices import mobile
     candidate=dict(state); candidate.pop("handoff")
     plat=None
     try:
@@ -292,15 +353,14 @@ def _resume(args):
         elif candidate.get("kind") == "browser":
             plat=ds.attach_browser(args.session, state=candidate)
         else:
-            ds.save_state(args.session,candidate)
-            try:
-                plat=ds.attach(args.session)
-                if plat is None: raise RuntimeError("Session expired; reconnect required")
-            finally:
-                ds.save_state(args.session,state)
+            plat=ds.attach(args.session, state=candidate)
+            if plat is None: raise RuntimeError("Session expired; reconnect required")
+            plat.prepare_resume()
         # A fresh screenshot is required before returning control, not a login-success claim.
         from .observations import capture
         observation = capture(plat, args.session)
+        candidate = dict(ds.load_state(args.session) or state)
+        candidate.pop("handoff", None)
         candidate["resume_note"]=args.note
         if candidate.get("kind") == "browser" and hasattr(plat, "page_id"):
             candidate["page_id"] = plat.page_id
@@ -309,6 +369,9 @@ def _resume(args):
                 "observation":observation,"requires_observation":True}
     except DesktopHandoffRequired as exc:
         return {"session":args.session,**exc.details}
+    except Exception as exc:
+        _handoff_error(args.session, exc)
+        raise
     finally: ds.release_controller(plat, state.get("os") or state.get("kind"))
 
 
@@ -324,7 +387,7 @@ def _human_event(args, function):
         try:
             result = function(args)
         except Exception:
-            if function is _handoff:
+            if function is _handoff and not (ds.load_state(args.session) or {}).get("handoff"):
                 release(owner)
             raise
         if function is _resume and result.get("status") == "needs_observation":

@@ -101,6 +101,27 @@ Appium 输入异常不再切换输入方法重发；device 与 QA 使用独立�
 
 单会话也支持 `device handoff/resume` 及 MCP `device_handoff/device_resume`。接管期间禁止自动输入；恢复成功截图后交由调用方核验。登录、支付或系统授权由用户处理，恢复说明不是业务已完成的证明。
 
+Android 接管同时恢复并核验已保存的用户输入法，保持设备/任务资源归属和当前页面。
+新连接不再长期选用自动化输入法，自动输入由 Appium `mobile: type` 临时切换并恢复。
+device、CLI/MCP 和 Runtime 共用该实现；重复接管、重新连接不能丢失已保存的选择。
+旧会话若只有 UnicodeIME 而无原选择，会列出候选并要求用户在系统设置中选择后重试，
+不会猜测或硬编码键盘。用户接管期间的新选择在恢复时保存。
+输入法恢复或重新观察失败时保持暂停并报告错误；成功重新观察后才允许新动作。
+不要用 `resetKeyboard`、断开 Appium、重启应用或清数据替代接管恢复。
+详细步骤及真实验收边界见 [Android 接管输入验证](../android/handoff-validation.md)。
+
+手机在接管期间 Appium 会话过期，可显式 `device connect` 原设备、服务器与会话
+别名。仅明确的 `InvalidSessionId` 会触发重建；网络失败保持原绑定并报错。
+重连仍保持 `waiting_for_human` 与原资源归属，不代替 resume。新会话已创建但
+后续准备失败时保留新绑定和暂停状态，便于显式恢复，不通过反复新建掩盖错误。
+
+iOS 输入使用 XCUITest 的聚焦元素 `send_keys`，没有 Android UnicodeIME 切换。
+新连接默认将 `connectHardwareKeyboard` 和 `forceSimulatorSoftwareKeyboardPresence`
+均设为 false，以保留模拟器现有软/硬键盘偏好；显式 `appium.caps` 可以覆盖。
+旧会话若已经改变偏好而没有原值记录，需要用户在 Simulator 键盘菜单中恢复选择。
+本次仅覆盖离线契约，没有真实 iOS 设备或模拟器验收，不能把 Android 修复与
+离线测试描述为 iOS 人工输入已验证。
+
 设备操作事实写入 `$SAYGO_HOME_DIR/operations` 的 JSONL。可用时保留输入前后截图；建页、切页、关页保存页面列表和目标，关闭选中页时明确记录截图不可用，不换到其他页。
 
 交互任务与声明式工作流保存派发前 `action_dispatching.before`、派发后 `action_evidence` 或截图错误；Agent 说明另存为 `agent_annotation`。导出包含状态、事件和截图，可能含应用资料、输入内容和消息，应按对应业务数据管理。

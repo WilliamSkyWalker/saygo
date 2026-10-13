@@ -83,6 +83,8 @@ class AppiumPlatform(Platform):
         self._screen_height = 0
         self._last_shot_size: tuple[int, int] | None = None
         self._mjpeg = None            # MjpegFrameReader（常驻帧流，None=未启用/未就绪）
+        self._ime_state = {}          # Shared with persisted device/task bindings.
+        self._ime_save = None         # Optional callback; save before switching IME.
 
     # --- Lifecycle ---
 
@@ -94,6 +96,7 @@ class AppiumPlatform(Platform):
         from .appium_server import AppiumServerManager
 
         cfg = config.get("appium", {}) or {}
+        self._ime_state = dict(cfg.get("_ime_state") or {})
         self._os = (cfg.get("os") or config.get("platform") or "android").lower()
         server_url = cfg.get("server_url") or os.environ.get(
             "APPIUM_SERVER_URL", "http://127.0.0.1:4723")
@@ -123,6 +126,10 @@ class AppiumPlatform(Platform):
             if cfg.get("wda_bundle_id"):
                 opts.set_capability("updatedWDABundleId", cfg["wda_bundle_id"])
             opts.set_capability("shouldTerminateApp", False)
+            # Both false tell XCUITest to preserve the Simulator's keyboard
+            # preferences instead of disabling the user's hardware keyboard.
+            opts.set_capability("connectHardwareKeyboard", False)
+            opts.set_capability("forceSimulatorSoftwareKeyboardPresence", False)
         else:
             opts = UiAutomator2Options()
             opts.automation_name = "UiAutomator2"
@@ -136,14 +143,10 @@ class AppiumPlatform(Platform):
             # 附着当前前台，不启动/不重置
             opts.set_capability("noReset", True)
             opts.set_capability("autoLaunch", False)
-            # ⚠️ 不设 skipDeviceInitialization —— 它会跳过 Appium 装 io.appium.settings，
-            # 导致 unicodeKeyboard(下方)起不了 UnicodeIME、session 失败。让 Appium 自己
-            # 做 device init(用 server 端 adb 装 helper，云农场同理)，saygo 不碰 adb。
-            # Flutter 文字输入：Flutter 的输入框不是原生 EditText，ACTION_SET_TEXT
-            # 无效；必须走真 IME 提交。开 UnicodeIME（io.appium.settings 提供，
-            # 云农场预装）才能把文字打进 Flutter 字段，且支持 CJK。
-            opts.set_capability("unicodeKeyboard", True)
-            opts.set_capability("resetKeyboard", True)
+            # Keep Appium device initialization so its Settings helper is available.
+            # mobile: type temporarily uses UnicodeIME and restores the user's IME.
+            # unicodeKeyboard would instead leave that automation IME selected;
+            # resetKeyboard is not supported by current Android drivers.
 
         # 通用：命令超时给足，避免长决策间隔掉 session
         opts.set_capability("newCommandTimeout", 600)
@@ -164,11 +167,27 @@ class AppiumPlatform(Platform):
         log.info("连接 Appium server %s (os=%s, device=%s)...", server_url, self._os, device or "auto")
         self._driver = webdriver.Remote(server_url, options=opts)
         self._server_url = server_url
+        if self._os == "android":
+            self._android_ime().record_current()
         self._detect_screen_size()
         log.info("Appium session 就绪: %s %dx%d", self._os, self._screen_width, self._screen_height)
 
         if mjpeg_port:
             self._start_mjpeg(server_url, mjpeg_port, int(mjpeg_cfg.get("quality") or 90))
+
+    def _android_ime(self):
+        from .android_ime import AndroidInputMethod
+        return AndroidInputMethod(self._driver, self._ime_state, self._ime_save)
+
+    def prepare_handoff(self, input_method=None) -> dict:
+        """Restore a verified manual keyboard without changing the app/session."""
+        if self._os != "android":
+            return {"platform": self._os, "changed": False}
+        return self._android_ime().ensure_manual(input_method)
+
+    def prepare_resume(self) -> dict:
+        """Keep the user's latest keyboard choice; typing switches IME only briefly."""
+        return self.prepare_handoff()
 
     def _pick_mjpeg_port(self, want: int, device: str) -> int:
         """选一个 mjpegServerPort（主机侧端口）。
@@ -366,22 +385,36 @@ class AppiumPlatform(Platform):
     def input_text(self, text: str) -> None:
         """向当前聚焦的输入框写文字。
 
-        Android：走 `mobile: type` —— 经 UnicodeIME（unicodeKeyboard cap 已激活，
-        io.appium.settings 提供）真 IME 提交。IME 对「聚焦的输入框」提交文字，
+        Android：走 `mobile: type` —— 临时经 UnicodeIME（io.appium.settings 提供）
+        真 IME 提交，前后保存并核验普通键盘。IME 对「聚焦的输入框」提交文字，
         **不管是原生 EditText 还是 Flutter 自绘都通吃**，且支持 CJK；比只对原生有效的
         ACTION_SET_TEXT 更普适，故原生/Flutter 不分叉。
         iOS：聚焦元素 send_keys。任一输入派发异常均不换路径重发。
         """
         if not text:
             return
+        ime = self._android_ime() if self._os == "android" else None
+        if ime is not None:
+            # Preparation errors explicitly mean no text was dispatched.
+            ime.ensure_manual()
+        failure = None
         try:
             if self._os == "android":
                 self._driver.execute_script("mobile: type", {"text": text})
             else:
                 self._driver.switch_to.active_element.send_keys(text)
         except Exception as e:
+            failure = e
+        if ime is not None:
+            try:
+                ime.ensure_manual()
+            except Exception as exc:
+                raise ActionOutcomeUnknown(
+                    "Input was dispatched; Android keyboard restoration failed: "
+                    f"{exc}. Observe and review; do not replay the input") from exc
+        if failure is not None:
             raise ActionOutcomeUnknown(
-                "Input outcome unknown; observe and review before sending new input") from e
+                "Input outcome unknown; observe and review before sending new input") from failure
 
     def press_key(self, key: str) -> None:
         if self._os == "android":

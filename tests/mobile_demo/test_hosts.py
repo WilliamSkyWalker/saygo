@@ -43,6 +43,7 @@ class HostTests(unittest.TestCase):
         from saygo.platforms.appium import AppiumPlatform
         with patch("saygo.platforms.appium_server.AppiumServerManager") as manager, patch("appium.webdriver.Remote") as remote, patch.object(AppiumPlatform, "_detect_screen_size"):
             manager.return_value.ensure_running.return_value = "http://127.0.0.1:4723"
+            remote.return_value.execute.return_value = {"value": "com.example.keyboard/.Keyboard"}
             AppiumPlatform().setup({"appium": {"os": "android", "device": "emulator-5554", "adb_port": 15037}})
         self.assertEqual(remote.call_args.kwargs["options"].to_capabilities()["appium:adbPort"], 15037)
 

@@ -210,33 +210,47 @@ class InteractiveRuntime(Runtime):
     def handoff_task(self, run_id, instructions):
         if not isinstance(instructions, str) or not instructions.strip():
             raise ValueError("Human instructions required")
-        from saygo.platforms import device_session as ds
+        from argparse import Namespace
+        from saygo.devices.control import _handoff
         with self._task(run_id) as state:
-            if state["status"] != "idle":
+            if state["status"] not in {"idle", "waiting_for_human"} or state["pending"]:
                 raise ValueError("Resolve/recover active input before handoff")
-            state.update(status="waiting_for_human", human={"instructions": instructions}, observations={})
+            state.update(status="waiting_for_human", human={"instructions": instructions},
+                         observations={}, error=None)
             self.store.save(state, "human_requested", state["human"])
+            errors, prepared = [], {}
             for spec in state["workflow"]["resources"].values():
-                binding = ds.load_state(spec["session"])
-                binding["handoff"] = {"status":"waiting_for_human", "instructions": instructions, "task": run_id}
-                ds.save_state(spec["session"], binding)
+                session = spec["session"]
+                try:
+                    prepared[session] = _handoff(Namespace(
+                        session=session, reason="human", instructions=instructions,
+                        task=run_id, input_method=None))
+                except Exception as exc:
+                    errors.append(f"{session}: {type(exc).__name__}: {exc}")
+            if errors:
+                state["error"] = "; ".join(errors)
+                self.store.save(state, "human_handoff_failed", {"error": state["error"], "sessions": prepared})
+                raise RuntimeError(state["error"])
+            self.store.save(state, "human_ready", {"sessions": prepared})
             return state
 
     def resume_task(self, run_id, note):
-        from argparse import Namespace
-        from saygo.devices.control import _resume
         if not isinstance(note, str) or not note.strip():
             raise ValueError("Completion note required")
         with self._task(run_id) as state:
             if state["status"] != "waiting_for_human":
                 raise ValueError("Task is not waiting for human control")
-            from saygo.platforms import device_session as ds
-            for spec in state["workflow"]["resources"].values():
-                if (ds.load_state(spec["session"]) or {}).get("handoff"):
-                    _resume(Namespace(session=spec["session"], note=note))
-            state["observations"] = {}
-            for name in state["workflow"]["resources"]:
-                self._observe(state, name)
+            state.update(observations={}, error=None)
+            self.store.save(state, "human_resume_requested", {"note": note})
+            try:
+                for name in state["workflow"]["resources"]:
+                    self._resource(state, name).resume(note)
+                for name in state["workflow"]["resources"]:
+                    self._observe(state, name)
+            except Exception as exc:
+                state.update(observations={}, error=f"{type(exc).__name__}: {exc}")
+                self.store.save(state, "human_resume_failed", {"error": state["error"]})
+                raise
             state.update(status="idle", human=None)
             self.store.save(state, "human_returned", {"note": note, "business_success": None})
             return state
@@ -254,13 +268,8 @@ class InteractiveRuntime(Runtime):
         if not isinstance(note, str) or not note.strip():
             raise ValueError("Cancellation requires a note; uncertain actions remain in the history")
         with self._task(run_id) as state:
-            from saygo.platforms import device_session as ds
             # Cancellation stops the task; it does not undo input or certify an outcome.
-            for spec in state["workflow"]["resources"].values():
-                binding = ds.load_state(spec["session"]) or {}
-                if binding.get("handoff", {}).get("task") == run_id:
-                    binding.pop("handoff")
-                    ds.save_state(spec["session"], binding)
+            self._clear_session_handoffs(state)
             state["status"] = "cancelled"
             self.store.save(state, "task_cancelled", {"note": note, "unresolved_action": state["pending"]}, release=True)
             release(run_id)

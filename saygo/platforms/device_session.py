@@ -115,7 +115,20 @@ def _attach_driver(server_url: str, session_id: str, os_name: str):
     return drv
 
 
-def _platform_from_driver(drv, os_name: str, state: dict):
+def _bind_input_method(plat, serial):
+    """Persist keyboard choice without overwriting human/task ownership metadata."""
+    if plat._os != "android":
+        return
+    def save(value):
+        current = load_state(serial)
+        if not current or current.get("session_id") != plat._driver.session_id:
+            raise RuntimeError("Device session changed while saving the Android keyboard")
+        current["android_input_method"] = dict(value)
+        save_state(serial, current)
+    plat._ime_save = save
+
+
+def _platform_from_driver(drv, os_name: str, state: dict, serial=None):
     """用已连上的 driver 组装一个 AppiumPlatform（还原屏幕尺寸缓存）。"""
     from .appium import AppiumPlatform
     plat = AppiumPlatform()
@@ -124,12 +137,15 @@ def _platform_from_driver(drv, os_name: str, state: dict):
     plat._server_url = state.get("server_url", "")
     plat._screen_width = int(state.get("screen_width") or 0)
     plat._screen_height = int(state.get("screen_height") or 0)
+    plat._ime_state = dict(state.get("android_input_method") or {})
+    _bind_input_method(plat, serial)
     if not (plat._screen_width and plat._screen_height):
         plat._detect_screen_size()
     return plat
 
 
-def start(serial: str | None, os_name: str = "android", browser_backend: str | None = None, appium_config: dict | None = None) -> "object":
+def start(serial: str | None, os_name: str = "android", browser_backend: str | None = None,
+          appium_config: dict | None = None, *, allow_handoff=False) -> "object":
     """新建一个 device session 并落状态文件，返回平台对象。已有存活 session 则复用。
 
     os_name="browser" → 常驻 Chrome（remote-debugging-port，跨进程按 debuggerAddress
@@ -138,33 +154,57 @@ def start(serial: str | None, os_name: str = "android", browser_backend: str | N
         return _browser_start(serial, backend=browser_backend)
     if browser_backend is not None:
         raise ValueError("--backend is only supported for browser sessions")
-    # 已有状态且能连通 → 直接复用，不重复建
-    existing = attach(serial, quiet=True)
+    previous = load_state(serial) or {}
+    candidate = dict(previous)
+    if allow_handoff:
+        candidate.pop("handoff", None)
+    # Reconnecting a paused device requires proof of expiry, not a timeout that
+    # might leave a live session running. Its pause remains on disk throughout.
+    existing = (attach(serial, quiet=True, state=candidate, strict=True)
+                if allow_handoff else attach(serial, quiet=True))
     if existing is not None:
         return existing
     from .appium import AppiumPlatform
     plat = AppiumPlatform()
     config = {"os": os_name, "device": serial or "", **(appium_config or {})}
-    plat.setup({"appium": config})
-    save_state(serial, {
-        "server_url": plat._server_url,
-        "session_id": plat._driver.session_id,
-        "os": plat._os,
-        "screen_width": plat._screen_width,
-        "screen_height": plat._screen_height,
-        "serial": serial or "",
-        "device_id": config["device"],
-    })
-    # start 亲手起的 server 不能在进程退出时被关（要留给后续 device 命令）→ 交出所有权
-    if plat._server is not None:
-        plat._server._owned = False
+    if previous.get("os") == os_name and previous.get("device_id") == config["device"]:
+        config = {**previous.get("appium_connection", {}), **config}
+        config["_ime_state"] = previous.get("android_input_method") or {}
+    connection = {key: config[key] for key in ("adb_port", "team_id", "wda_bundle_id", "signing_id") if key in config}
+
+    def save_created():
+        save_state(serial, {
+            "server_url": plat._server_url,
+            "session_id": plat._driver.session_id,
+            "os": plat._os,
+            "screen_width": plat._screen_width,
+            "screen_height": plat._screen_height,
+            "serial": serial or "",
+            "device_id": config["device"],
+            "appium_connection": connection,
+            **({"android_input_method": dict(plat._ime_state)} if plat._os == "android" else {}),
+            **({"handoff": previous["handoff"]} if allow_handoff and previous.get("handoff") else {}),
+        })
+        # Retain the host even if a later keyboard check fails; reconnect must
+        # address this recorded session, not leave an untracked live session.
+        if plat._server is not None:
+            plat._server._owned = False
+
+    try:
+        plat.setup({"appium": config})
+    except Exception:
+        if plat._driver is not None and plat._driver.session_id:
+            save_created()
+        raise
+    save_created()
+    _bind_input_method(plat, serial)
     log.info("device session 就绪: serial=%s session=%s", _key(serial), plat._driver.session_id[:8])
     return plat
 
 
-def attach(serial: str | None, quiet: bool = False) -> "object | None":
+def attach(serial: str | None, quiet: bool = False, *, state=None, strict=False) -> "object | None":
     """重连到状态文件里记录的 session；连不上返回 None。"""
-    state = load_state(serial)
+    state = load_state(serial) if state is None else state
     if not state:
         if not quiet:
             log.warning("无 device session 状态文件（先跑 saygo device start）: %s", _key(serial))
@@ -181,10 +221,14 @@ def attach(serial: str | None, quiet: bool = False) -> "object | None":
         drv = _attach_driver(state["server_url"], state["session_id"], state.get("os", "android"))
         # 探活：读一下 window size，失败说明 session 已过期
         drv.get_window_size()
-        return _platform_from_driver(drv, state.get("os", "android"), state)
+        return _platform_from_driver(drv, state.get("os", "android"), state, serial)
     except ImportError as e:
         raise RuntimeError('Mobile Python dependencies are missing; install the mobile extra') from e
     except Exception as e:
+        if strict:
+            from selenium.common.exceptions import InvalidSessionIdException
+            if not isinstance(e, InvalidSessionIdException):
+                raise RuntimeError(f"Cannot verify the saved Appium session; it was not replaced: {e}") from e
         if not quiet:
             log.warning("重连 session 失败（可能已过期，重新 start）: %s", e)
         return None

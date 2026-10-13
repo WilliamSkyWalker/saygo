@@ -22,6 +22,40 @@ saygo device screenshot --session phone
 
 `--session` 是别名，与设备 ID 不同；已绑定其他设备或 Appium 服务器的别名不能覆盖。输入使用统一观察协议，完成后核验图像。
 
+## 人工接管与键盘
+
+新连接记录用户当前输入法，不再默认用 `unicodeKeyboard` 长期占用系统键盘。
+中文、英文自动输入仍走 Appium `mobile: type`：驱动在单次输入期间临时使用
+UnicodeIME，结束后恢复之前的选择。Saygo 不依赖 `resetKeyboard` 或断开连接
+恢复键盘，也不通过重启应用、清数据或结束会话完成接管。
+
+```sh
+saygo device handoff --session phone --instructions '请在当前页面完成手动输入后交还控制'
+saygo device resume --session phone --note '用户已完成手动输入并交还控制'
+```
+
+handoff 先阻止自动操作，再通过 Appium 的输入法接口恢复并核验保存的普通键盘。
+会话和任务继续持有设备资源，当前应用与页面不变。重复接管不会用 UnicodeIME
+覆盖原选择；用户在接管期间手动切换了键盘，恢复时保存其最新选择。恢复控制后
+重新截图，后续输入必须使用新的观察。输入法恢复、持久保存或截图失败会明确报错，
+保持暂停，不能把失败当作已交还控制。
+
+0.4.18 等旧会话可能已经选中 UnicodeIME，却没有保存原输入法。此时 Saygo 列出
+可选输入法并要求用户选择；可用列表可能包括语音服务，不能把首项当普通键盘。
+用户在 Android 系统输入法设置中选回自己的键盘，再重试接管或恢复。没有候选或
+远程 Appium 不提供输入法接口时同样明确报错；不会硬编码某款键盘或执行
+`ime reset` 覆盖用户配置。
+
+人工接管较久导致 Appium 会话过期时，显式对原设备、原服务器和原会话别名执行
+`device connect`。只有驱动明确返回 `InvalidSessionId` 才重建 Appium 会话；
+网络失败不会创建替代会话。重连保留暂停状态、输入法记录与设备/任务资源归属，
+并不等于 resume。新会话已创建但后续准备失败时也保留其绑定，以便再次显式恢复，
+不能通过重复新建会话绕过错误。完成手动操作后仍需 resume 和新的观察。
+
+普通 device、MCP 和 Runtime task/显式 workflow 复用平台输入法管理。
+人工接管期间需分别检查屏幕软键盘和电脑键盘；Agent 注入的文字只能验证自动输入。
+本次诊断、独立测试夹具和验收边界见[接管输入验证](handoff-validation.md)。
+
 ## 安装和启动模拟器
 
 ```sh
@@ -74,3 +108,9 @@ python3 -m unittest discover -s tests/mobile_demo -v
 离线测试模拟命令和 Appium，验证发现、选择、许可拒绝、前置检查、安装顺序、主机路由、会话身份、截图验证与传输失败，不是硬件通过。
 
 原记录已实测 WSL→Windows 的 SDK/工具安装、API 35 模拟器启动、Appium 连接、截图、打开系统设置、坐标点击和搜索输入。隐藏控制台修复后做过 21 次 Windows helper 调用及独立 45 秒观察，未出现可见辅助控制台。其他主机、真机组合与完整跨端业务流程仍需单独验收。
+
+人工输入修复已在独立 API 35 模拟器和自有夹具完成普通 device CLI 与 Runtime task
+MCP 的自动输入、人工接管、用户确认软键盘/电脑键盘输入、恢复观察和再次自动
+中英文输入。普通 device 另完成旧 UnicodeIME 残留恢复、重复接管和未过期会话的
+暂停态重连。过期会话重建、多普通键盘切换、故障注入、显式 workflow 与 iOS
+仅有离线覆盖；源码验证不代表正式安装版已升级。完整结果见[接管输入验证](handoff-validation.md)。
