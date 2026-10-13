@@ -5,6 +5,8 @@ import json
 
 def _session_options(parser, *, screenshot=False):
     parser.add_argument("--session", "--serial", dest="serial", default=None)
+    parser.add_argument('--request-id', help='Stable caller ID; retries return the original result without dispatch')
+    parser.add_argument('--observation-id', help='Required for input; take a fresh screenshot first')
     if screenshot:
         parser.add_argument("--out", default=None)
 
@@ -69,6 +71,7 @@ def register(sub):
     for page_cmd in ("pages", "select-page", "close-page", "new-page"):
         page_parser = dev_sub.add_parser(page_cmd, help="Browser page management via Playwright or extension")
         page_parser.add_argument("--serial", "--session", required=True)
+        page_parser.add_argument('--request-id')
         if page_cmd == "new-page":
             page_parser.add_argument("url", help="HTTP(S) URL; returns a new page ID without selecting it")
         elif page_cmd != "pages":
@@ -83,15 +86,20 @@ def register(sub):
             p.add_argument("--timeout", type=float, default=5)
         if name == "act":
             p.add_argument("action", type=json.loads, help="JSON action object; type and coordinate_space")
-            p.add_argument("--observation-id")
             p.add_argument("--observe-after", action="store_true")
             p.add_argument("--timeout", type=float, default=5)
     d_shot.add_argument("--crop", type=int, nargs=4, metavar=("LEFT", "TOP", "RIGHT", "BOTTOM"))
     d_tap.add_argument("--coordinate-space", choices=["screen", "percent", "image", "crop"], default="screen")
-    d_tap.add_argument("--observation-id")
     d_tap.add_argument("--observe-after", action="store_true")
     d_stop = dev_sub.add_parser("stop", help="Quit the device session")
     _session_options(d_stop)
+    d_resolve = dev_sub.add_parser('resolve', help='Resolve an uncertain request after inspecting its result')
+    d_resolve.add_argument('--session', '--serial', dest='serial', required=True)
+    d_resolve.add_argument('--request-id', required=True)
+    d_resolve.add_argument('--resolution', choices=['applied', 'not_applied'], required=True)
+    d_resolve.add_argument('--note', required=True)
+    d_operations = dev_sub.add_parser('operations', help='List recent requests, including interrupted requests to review')
+    d_operations.add_argument('--session', '--serial', dest='serial')
     dev_p.set_defaults(handler=cmd_device)
 
 

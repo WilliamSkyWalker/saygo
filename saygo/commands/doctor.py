@@ -39,7 +39,8 @@ def diagnose(session=None, probe_action=None):
             result["image_readable"] = True
         result["input_check"] = {"status": "not_tested", "reason": "Input requires a user-chosen harmless target; capabilities do not prove input permission"}
         if probe_action is not None:
-            result["input_check"] = execute("act", session, action=probe_action, observe_after=True)
+            result["input_check"] = execute("act", session, action=probe_action,
+                                            observation_id=shot.get('observation_id'), observe_after=True)
         result["ok"] = result["image_readable"] and result["capabilities"].get("ok", False) and result["input_check"].get("ok", True)
     return result
 

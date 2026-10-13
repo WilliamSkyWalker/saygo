@@ -3,12 +3,19 @@ import time
 from pathlib import Path
 from argparse import Namespace
 
+INPUT_COMMANDS = {'act', 'tap', 'swipe', 'input', 'key', 'open', 'scroll',
+                  'navigate', 'launch', 'type-send'}
+MUTATING_COMMANDS = INPUT_COMMANDS | {'start', 'stop', 'new-page', 'select-page', 'close-page'}
+
+REQUEST_DEFAULTS = dict(out=None, foreground=False, wait_s=0, backend=None, os="android",
+                        prepare_only=False, replace=False, send_x=None, send_y=None,
+                        force_stop=False, duration_ms=300, crop=None, observation_id=None,
+                        coordinate_space="screen", observe_after=False, timeout=5,
+                        mode="stable", window_id=None)
+
 
 def _request(command, session=None, **options):
-    defaults = dict(out=None, foreground=False, wait_s=0, backend=None, os="android",
-                    prepare_only=False, replace=False, send_x=None, send_y=None,
-                    force_stop=False, duration_ms=300, crop=None, observation_id=None,
-                    coordinate_space="screen", observe_after=False, timeout=5, mode="stable", window_id=None)
+    defaults = REQUEST_DEFAULTS.copy()
     defaults.update(options)
     result = _execute(Namespace(device_command=command, serial=session, **defaults))
     if result is None:
@@ -122,10 +129,15 @@ def _execute(args):
             result = observations.wait(plat, args.mode, args.timeout)
             result["observation"] = _shot(plat, args.out)
             return result
+        observation = None
+        if cmd in INPUT_COMMANDS:
+            if not args.observation_id:
+                raise ValueError('Input requires observation_id; observe the selected target first')
+            observation = observations.load(args.observation_id, serial)
+            from .requests import validate_observation
+            from saygo.runtime.locking import session_keys
+            validate_observation(observation, session_keys(serial))
         if cmd == "act":
-            observation = observations.load(args.observation_id, serial) if args.observation_id else None
-            if observation and time.time() - observation["at"] > 30:
-                raise ValueError("Observation expired; observe again (maximum age 30s)")
             prepared = actions.prepare(plat, args.action, observation)
             before = _shot(plat, None)
             if not observation and before.get("window_id") is not None and callable(getattr(type(plat), "expect_window", None)):
@@ -145,32 +157,31 @@ def _execute(args):
                 result["observation"] = _shot(plat, args.out)
             return result
         if cmd not in {"screenshot", "focus"}:
+            action = _legacy_action(cmd, args, plat)
+            prepared = actions.prepare(plat, action, observation)
             before = _shot(plat, None)
             if before.get("window_id") is not None and callable(getattr(type(plat), "expect_window", None)):
                 plat.expect_window(before)
-            _record(args.record, "dispatching", {"before": before})
+            _record(args.record, "dispatching", {"before": before, "action": prepared})
 
         if cmd == "open":
             dispatched = True
-            plat.open_target(args.target)
+            actions.dispatch(plat, prepared)
             return ({"ok": True, "target": args.target})
         elif cmd == "scroll":
             dispatched = True
-            (plat.scroll_up if args.direction == "up" else plat.scroll_down)()
+            actions.dispatch(plat, prepared)
             return ({"ok": True, "direction": args.direction})
         elif cmd == "navigate":
             dispatched = True
-            plat.open_target(args.url)
+            actions.dispatch(plat, prepared)
             time.sleep(max(0.0, args.wait_s))
             return (_shot(plat, args.out))
         elif cmd in ("screenshot", "focus"):
             return (_shot(plat, args.out))
         elif cmd == "tap":
-            observation = observations.load(args.observation_id, serial) if args.observation_id else None
-            prepared = actions.prepare(plat, {"type":"tap", "x":args.x, "y":args.y,
-                                             "coordinate_space":args.coordinate_space}, observation)
             dispatched = True
-            plat.tap(prepared["x"], prepared["y"])
+            plat.tap(prepared['x'], prepared['y'])
             result = {"ok": True, "tapped": [args.x, args.y]}
             if args.out or args.observe_after:
                 observations.wait(plat, "stable", args.timeout)
@@ -182,33 +193,48 @@ def _execute(args):
                 raise ValueError("duration_ms must be in [1,30000]")
             if callable(getattr(type(plat), "_w3c_swipe", None)):
                 dispatched = True
-                plat._w3c_swipe(args.x1, args.y1, args.x2, args.y2, duration_ms=args.duration_ms)
+                plat._w3c_swipe(*(prepared[k] for k in ('x1', 'y1', 'x2', 'y2')), duration_ms=args.duration_ms)
             elif args.duration_ms != 300:
                 raise ValueError("Custom swipe duration is unsupported by this backend")
             else:
                 dispatched = True
-                plat.swipe(args.x1, args.y1, args.x2, args.y2)
+                actions.dispatch(plat, prepared)
             return ({"ok": True, "from": [args.x1, args.y1], "to": [args.x2, args.y2]})
         elif cmd == "input":
             dispatched = True
-            plat.input_text(args.text)
+            actions.dispatch(plat, prepared)
             return ({"ok": True, "len": len(args.text)})
         elif cmd == "type-send":
+            actions.prepare(plat, {'type': 'input', 'text': args.text})
+            if not args.prepare_only:
+                actions.prepare(plat, {'type': 'tap', 'x': args.send_x, 'y': args.send_y})
             dispatched = True
-            plat.tap(args.input_x, args.input_y); time.sleep(0.7)
+            plat.tap(prepared['x'], prepared['y']); time.sleep(0.7)
             if args.replace:
                 plat.press_key("ctrl+a")
             plat.input_text(args.text); time.sleep(0.4)
             if not args.prepare_only:
+                # Typed text may change the layout; never submit at an unchecked old coordinate.
+                current = _shot(plat, None)
+                original = Path(observation.get('source_path', observation['path'])).read_bytes()
+                latest = Path(current['source_path']).read_bytes()
+                sx, sy = current['width'] / plat.screen_size[0], current['height'] / plat.screen_size[1]
+                region = (max(0, int(args.send_x * sx - 24)), max(0, int(args.send_y * sy - 24)),
+                          min(current['width'], int(args.send_x * sx + 25)), min(current['height'], int(args.send_y * sy + 25)))
+                if any(current.get(k) != observation.get(k) for k in
+                       ('screen_size', 'target', 'window_id', 'process_id', 'window_bounds', 'page_id')) \
+                        or observations.change_fraction(original, latest, region) > .002:
+                    raise RuntimeError('Submission target changed; inspect the draft before submitting')
+                send = actions.prepare(plat, {'type': 'tap', 'x': args.send_x, 'y': args.send_y}, current)
                 submission_attempted = True
-                plat.tap(args.send_x, args.send_y)
+                plat.tap(send['x'], send['y'])
                 time.sleep(max(0.0, args.wait_s))
             res = _shot(plat, args.out)
             res.update({"text": args.text, "submitted": not args.prepare_only, "requires_observation": True})
             return (res)
         elif cmd == "key":
             dispatched = True
-            plat.press_key(args.key)
+            actions.dispatch(plat, prepared)
             return ({"ok": True, "key": args.key})
         elif cmd == "launch":
             dispatched = True
@@ -225,15 +251,17 @@ def _execute(args):
             error["requires_observation"] = dispatched
         return error
     finally:
-        if dispatched and plat is not None:
-            try:
-                if cmd in {"new-page", "select-page", "close-page"}:
-                    _page_evidence(plat, serial, args.record, "after")
-                else:
-                    _record(args.record, "after", _shot(plat, None))
-            except Exception as exc:
-                _record(args.record, "observation_failed", {"error": str(exc)})
-        ds.release_controller(plat)
+        try:
+            if dispatched and plat is not None:
+                try:
+                    if cmd in {"new-page", "select-page", "close-page"}:
+                        _page_evidence(plat, serial, args.record, "after")
+                    else:
+                        _record(args.record, "after", _shot(plat, None))
+                except Exception as exc:
+                    _record(args.record, "observation_failed", {"error": str(exc)})
+        finally:
+            ds.release_controller(plat)
 
 
 def _page_evidence(platform, session, record, phase):
@@ -247,6 +275,26 @@ def _page_evidence(platform, session, record, phase):
         result["observation_error"] = f"{type(exc).__name__}: {exc}"
     _record(record, "page_evidence", result)
     return result
+
+
+def _legacy_action(command, args, platform):
+    if command in {'tap', 'type-send'}:
+        return {'type': 'tap', 'x': args.x if command == 'tap' else args.input_x,
+                'y': args.y if command == 'tap' else args.input_y, 'coordinate_space': args.coordinate_space}
+    if command == 'swipe':
+        return {'type': 'swipe', **{k: getattr(args, k) for k in ('x1', 'y1', 'x2', 'y2')},
+                'coordinate_space': args.coordinate_space}
+    if command == 'input': return {'type': 'input', 'text': args.text}
+    if command == 'key': return {'type': 'press_key', 'key': args.key}
+    if command == 'scroll':
+        if args.direction not in {'up', 'down'}: raise ValueError('direction must be up/down')
+        return {'type': 'scroll_' + args.direction}
+    if command == 'navigate': return {'type': 'open_url', 'url': args.url}
+    if command == 'launch': return {'type': 'open_app', 'target': args.package}
+    if command == 'open':
+        return ({'type': 'open_url', 'url': args.target} if platform.platform_name == 'browser'
+                else {'type': 'open_app', 'target': args.target})
+    raise ValueError(f'Unsupported input command: {command}')
 
 
 def _record(path, kind, data):
@@ -263,24 +311,39 @@ def execute(command, session=None, **options):
     import uuid
     from saygo.platforms import device_session as ds
     from saygo.runtime.locking import resource_guard, session_keys
+    from . import requests
     record = None
     requested = False
     try:
         keys = session_keys(session)
-        with resource_guard(keys):
+        if command == 'start' and options.get('os', 'android') != 'browser':
+            device_id = (ds.load_state(session) or {}).get('device_id') or session
+            if not device_id:
+                raise ValueError('Mobile start requires an explicit device ID; use device connect for discovery')
+            keys = sorted(set(keys + ['mobile:' + device_id]))
+        if command == 'resolve':
+            return requests.resolve(session, options.get('request_id'), options.get('resolution'), options.get('note'))
+        if command == 'operations':
+            return requests.list_operations(session)
+
+        def perform(operation_id):
+            nonlocal record, requested
             if not set(session_keys(session)) <= set(keys):
-                raise RuntimeError("Session binding changed while acquiring control; retry after inspecting sessions")
+                return {'ok': False, 'outcome': 'not_dispatched', 'error': 'Session binding changed; inspect sessions'}
             root = ds.STATE_DIR.parent / "operations"
             root.mkdir(parents=True, exist_ok=True)
-            operation_id = uuid.uuid4().hex
             record = root / (operation_id + ".jsonl")
             _record(record, "requested", {"command": command, "session": session or "default", "options": options})
-            options["record"] = record
             requested = True
-            result = _request(command, session, **options)
+            result = _request(command, session, **{**options, 'record': record})
             result.update(operation_id=operation_id, record=str(record))
             _record(record, "result", result)
             return result
+        if command in MUTATING_COMMANDS:
+            request_id = options.pop('request_id', None)
+            return requests.run(session, request_id, {'command': command, 'options': {**REQUEST_DEFAULTS, **options}}, keys, perform)
+        with resource_guard(keys, owner=requests.review_owner(keys)):
+            return perform(uuid.uuid4().hex)
     except Exception as exc:
         result = {"ok": False, "error": str(exc), "error_type": type(exc).__name__,
                   "outcome": "uncertain" if requested else "not_dispatched", "requires_observation": requested}
@@ -291,3 +354,40 @@ def execute(command, session=None, **options):
             except OSError as journal_error:
                 result["journal_error"] = str(journal_error)
         return result
+
+
+def execute_observed(platform, session, action, observation, keys, *, request_id=None, dispatch=None):
+    """QA and other in-process callers use the same validation, journal and deduplication."""
+    from . import actions, observations, requests
+    from saygo.platforms import device_session as ds
+
+    def perform(operation_id):
+        root = ds.STATE_DIR.parent / 'operations'
+        root.mkdir(parents=True, exist_ok=True)
+        record = root / (operation_id + '.jsonl')
+        dispatched = False
+        try:
+            if not observation:
+                raise ValueError('Input requires an observation')
+            requests.validate_observation(observation, keys)
+            prepared = actions.prepare(platform, action, observation)
+            _record(record, 'dispatching', {'action': prepared, 'before': observation})
+            dispatched = True
+            result = dispatch(prepared) if dispatch else actions.dispatch(platform, prepared)
+            result = result if isinstance(result, dict) else {'dispatched': True}
+            result.update(ok=True, dispatched=True, business_success=None, requires_observation=True)
+        except Exception as exc:
+            result = {'ok': False, 'error': str(exc), 'error_type': type(exc).__name__,
+                      'outcome': 'uncertain' if dispatched else 'not_dispatched',
+                      'requires_observation': dispatched}
+        if dispatched:
+            try:
+                result['observation'] = observations.capture(platform, session)
+                _record(record, 'after', result['observation'])
+            except Exception as exc:
+                result['observation_error'] = str(exc)
+        result['record'] = str(record)
+        _record(record, 'result', result)
+        return result
+
+    return requests.run(session, request_id, {'action': action, 'observation_id': (observation or {}).get('id')}, keys, perform)

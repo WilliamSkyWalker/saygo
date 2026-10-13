@@ -701,7 +701,9 @@ def device_sessions() -> dict:
 @mcp.tool()
 def device_command(command: str, session: str, options: dict | None = None) -> dict:
     """Shared CLI commands: start, stop, pages, select-page, new-page, close-page,
-    open, navigate, capabilities, diagnose, wait. Use device_connect for a new binding.
+    open, navigate, capabilities, diagnose, wait, operations, resolve. Input requires observation_id;
+    request_id deduplicates retries. Resolve requires request_id, resolution and note.
+    Use device_connect for a new binding.
     Playwright is not supported through MCP; use a browser extension session.
     """
     return _device(command, session, **(options or {}))
@@ -764,9 +766,10 @@ def device_observe(session: str, crop: list[int] | None = None, foreground: bool
 @mcp.tool()
 def device_act(session: str, action: dict, observation_id: str | None = None,
                observe_after: bool = True, timeout: float = 5, foreground: bool = False,
-               window_id: str | None = None):
+               window_id: str | None = None, request_id: str | None = None):
     """Dispatch one action, optionally wait for stability and return a new observation.
-    coordinate_space: screen, percent, image, crop. Image/crop require observation_id.
+    coordinate_space: screen, percent, image, crop. All input requires observation_id.
+    Reuse request_id to retrieve a previous result without sending input again.
     scroll_at(x,y,amount): target the pane; browser 1 unit requests 100 CSS px,
     positive up, negative down. Start at half the pane height, reduce to 10-20%
     near the target, and adjust from each new screenshot. Check backend capabilities.
@@ -774,48 +777,58 @@ def device_act(session: str, action: dict, observation_id: str | None = None,
     Windows foreground=true explicitly uses global input on the activated target.
     """
     result = _device("act", session, action=action, observation_id=observation_id,
-                     observe_after=observe_after, timeout=timeout, foreground=foreground, window_id=window_id)
+                     observe_after=observe_after, timeout=timeout, foreground=foreground,
+                     window_id=window_id, request_id=request_id)
     return _image_result(result, [result["observation"]] if result.get("observation") else [])
 
 
 @mcp.tool()
-def device_tap(x: int, y: int, serial: str | None = None) -> dict:
+def device_tap(x: int, y: int, serial: str | None = None,
+               observation_id: str | None = None, request_id: str | None = None) -> dict:
     """Click in screen coordinates on the saved session, regardless of platform."""
-    return _device("tap", serial, x=x, y=y)
+    return _device("tap", serial, x=x, y=y, observation_id=observation_id, request_id=request_id)
 
 
 @mcp.tool()
-def device_input(text: str, serial: str | None = None) -> dict:
+def device_input(text: str, serial: str | None = None,
+                 observation_id: str | None = None, request_id: str | None = None) -> dict:
     """Type into the focused field without submitting."""
-    return _device("input", serial, text=text)
+    return _device("input", serial, text=text, observation_id=observation_id, request_id=request_id)
 
 
 @mcp.tool()
 def device_type_send(text: str, input_x: int, input_y: int, send_x: int, send_y: int,
-                     wait_s: float = 12, serial: str | None = None, out_path: str | None = None) -> dict:
+                     wait_s: float = 12, serial: str | None = None, out_path: str | None = None,
+                     observation_id: str | None = None, request_id: str | None = None) -> dict:
     """Focus, type, submit and capture. On uncertain results observe before retrying."""
     return _device("type-send", serial, text=text, input_x=input_x, input_y=input_y,
-                   send_x=send_x, send_y=send_y, wait_s=wait_s, out=out_path)
+                   send_x=send_x, send_y=send_y, wait_s=wait_s, out=out_path,
+                   observation_id=observation_id, request_id=request_id)
 
 
 @mcp.tool()
 def device_swipe(x1: int, y1: int, x2: int, y2: int, duration_ms: int = 300,
-                 serial: str | None = None) -> dict:
+                 serial: str | None = None, observation_id: str | None = None,
+                 request_id: str | None = None) -> dict:
     """Swipe on a saved session; custom duration requires a supporting backend."""
-    return _device("swipe", serial, x1=x1, y1=y1, x2=x2, y2=y2, duration_ms=duration_ms)
+    return _device("swipe", serial, x1=x1, y1=y1, x2=x2, y2=y2, duration_ms=duration_ms,
+                   observation_id=observation_id, request_id=request_id)
 
 
 @mcp.tool()
-def device_key(key: str, serial: str | None = None) -> dict:
+def device_key(key: str, serial: str | None = None,
+               observation_id: str | None = None, request_id: str | None = None) -> dict:
     """Press a platform key; unsupported input returns an error."""
-    return _device("key", serial, key=key)
+    return _device("key", serial, key=key, observation_id=observation_id, request_id=request_id)
 
 
 @mcp.tool()
 def device_launch(package: str, activity: str | None = None,
-                  serial: str | None = None, force_stop: bool = False) -> dict:
+                  serial: str | None = None, force_stop: bool = False,
+                  observation_id: str | None = None, request_id: str | None = None) -> dict:
     """Activate a mobile package on the saved Android or iOS session."""
-    return _device("launch", serial, package=package, force_stop=force_stop)
+    return _device("launch", serial, package=package, force_stop=force_stop,
+                   observation_id=observation_id, request_id=request_id)
 
 
 @mcp.tool()

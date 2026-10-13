@@ -13,8 +13,19 @@ from saygo.cli import main
 
 
 class ForegroundCLITests(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        patcher = patch.object(ds, 'STATE_DIR', Path(tmp.name) / 'sessions')
+        patcher.start(); self.addCleanup(patcher.stop)
+
     def run_command(self, command, controller, expect_error=False):
         state = {'kind': 'desktop', 'os': 'windows', 'app': 'Example'}
+        if command[0] in {'tap', 'act', 'type-send'}:
+            from saygo.devices.observations import save
+            with patch.object(ds, 'load_state', return_value=state):
+                shot = save(controller, controller.screenshot_raw.return_value, 'example')
+            command = [*command, '--observation-id', shot['id']]
         output = io.StringIO()
         with patch.object(sys, 'argv', ['saygo', 'device', *command]), \
              patch.object(ds, 'load_state', return_value=state), \
@@ -84,7 +95,11 @@ class ForegroundCLITests(unittest.TestCase):
 
     def test_capture_failure_after_send_reports_uncertain_submission(self):
         p = self.controller()
-        p.screenshot_raw.side_effect = [p.screenshot_raw.return_value, RuntimeError('capture unavailable'), RuntimeError('capture unavailable')]
+        def capture():
+            if p.tap.call_count >= 2:
+                raise RuntimeError('capture unavailable')
+            return p.screenshot_raw.return_value
+        p.screenshot_raw.side_effect = capture
         result, _ = self.run_command([
             'type-send', 'Example', '--session', 'example', '--input-x', '4', '--input-y', '5',
             '--send-x', '8', '--send-y', '9', '--wait-s', '0'], p, expect_error=True)

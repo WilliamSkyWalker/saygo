@@ -31,6 +31,11 @@ def metadata(platform, png, session=None):
 
 def capture(platform, session=None, out=None, crop=None):
     png = platform.screenshot_raw()
+    return save(platform, png, session, out, crop)
+
+
+def save(platform, png, session=None, out=None, crop=None):
+    """Persist the exact image used for a decision, including its target identity."""
     result = metadata(platform, png, session)
     oid = uuid.uuid4().hex
     root = ds.STATE_DIR.parent / "observations"

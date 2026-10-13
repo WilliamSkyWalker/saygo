@@ -114,7 +114,7 @@ finally: p.disconnect()
                 self.assertEqual(data["marker"], "preserved")
 
                 sessions = root / "device-sessions"
-                env = {**os.environ, "SAYGO_HOME_DIR": str(root)}
+                env = {**os.environ, "SAYGO_HOME_DIR": str(root), "SAYGO_RUNTIME_DIR": str(root / 'runtime')}
                 with patch.object(device_session, "STATE_DIR", sessions):
                     device_session.save_state("web", {"kind": "browser", "browser_backend": "playwright",
                         "debugger_address": f"127.0.0.1:{port}", "port": port, "page_id": original})
@@ -125,7 +125,11 @@ finally: p.disconnect()
                     # Playwright remains a CLI backend; MCP must reject it explicitly.
                     from saygo.mcp import server as mcp_server
                     from saygo.runtime.interactive import InteractiveRuntime
-                    out = subprocess.run(command + ["tap", "30", "25", "--session", "web"], env=env,
+                    observed_cli = subprocess.run(command + ["screenshot", "--session", "web"], env=env,
+                                                  capture_output=True, text=True, check=True, timeout=30)
+                    observation_id = json.loads(observed_cli.stdout)['observation_id']
+                    out = subprocess.run(command + ["tap", "30", "25", "--session", "web",
+                                         "--observation-id", observation_id, "--request-id", "focus-cli"], env=env,
                                          capture_output=True, text=True, check=True, timeout=30)
                     self.assertTrue(json.loads(out.stdout)["dispatched"])
                     result = mcp_server.device_input(" through MCP", serial="web")

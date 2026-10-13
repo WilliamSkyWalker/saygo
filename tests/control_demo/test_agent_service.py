@@ -67,13 +67,15 @@ class AgentServiceTests(unittest.TestCase):
         from saygo.cli import main
         from saygo.mcp import server
         out = io.StringIO()
+        shot = service.execute('screenshot', 'mail')
         with contextlib.redirect_stdout(out):
-            main(['device', 'tap', '20', '30', '--session', 'mail'])
+            main(['device', 'tap', '20', '30', '--session', 'mail', '--observation-id', shot['id']])
         self.assertTrue(json.loads(out.getvalue())['ok'])
-        result = server.device_tap(40, 50, 'mail')
+        shot = service.execute('screenshot', 'mail')
+        result = server.device_tap(40, 50, 'mail', observation_id=shot['id'])
         self.assertTrue(result['ok'])
         self.assertEqual(self.device.calls, [('tap',20,30), ('tap',40,50)])
-        self.assertEqual([c.args[0] for c in self.attach.call_args_list], ['mail','mail'])
+        self.assertEqual([c.args[0] for c in self.attach.call_args_list], ['mail'] * 4)
 
     def test_mcp_rejects_playwright_before_connect_or_dispatch(self):
         from saygo.mcp import server
@@ -94,7 +96,8 @@ class AgentServiceTests(unittest.TestCase):
         listing = server.device_sessions()
         self.assertNotIn('pw', [row['session'] for row in listing['sessions']])
         self.assertEqual(listing['unavailable_sessions'][0]['session'], 'pw')
-        self.assertTrue(service.execute('tap', 'pw', x=1, y=2)['ok'])
+        shot = service.execute('screenshot', 'pw')
+        self.assertTrue(service.execute('tap', 'pw', x=1, y=2, observation_id=shot['id'])['ok'])
 
     def test_mcp_defaults_new_browser_to_extension(self):
         from saygo.mcp import server
@@ -125,9 +128,11 @@ class AgentServiceTests(unittest.TestCase):
             ({'type':'tap','x':50,'y':30,'coordinate_space':'image'}, ('tap',100,60)),
             ({'type':'tap','x':20,'y':10,'coordinate_space':'crop'}, ('tap',60,30)),
         ]:
+            shot = service.execute('screenshot', 'mail', crop=[20,10,80,60])
             result = service.execute('act','mail',action=action,observation_id=shot['id'])
             self.assertTrue(result['ok'], result)
             self.assertEqual(self.device.calls[-1], expected)
+        shot = service.execute('screenshot', 'mail')
         self.device.frame = png(dot=[29,14,30,15])
         result = service.execute('act','mail',action={'type':'tap','x':60,'y':30},observation_id=shot['id'])
         self.assertFalse(result['ok'])
@@ -170,14 +175,16 @@ class AgentServiceTests(unittest.TestCase):
             self.assertFalse(result['ok'])
             self.assertEqual(result['error_type'],'BusyError')
             control.resume(Namespace(session='one-window',note='User returned control'))
-            self.assertTrue(service.execute('tap','other-window',x=1,y=2)['ok'])
+            shot = service.execute('screenshot', 'other-window')
+            self.assertTrue(service.execute('tap','other-window',x=1,y=2,observation_id=shot['id'])['ok'])
 
     def test_mcp_image_content_and_journal_uncertainty(self):
         from saygo.mcp import server
         content = server.device_observe('mail')
         self.assertEqual([c.type for c in content], ['text','image'])
         self.device.fail=True
-        result=service.execute('act','mail',action={'type':'tap','x':1,'y':2})
+        shot = service.execute('screenshot', 'mail')
+        result=service.execute('act','mail',action={'type':'tap','x':1,'y':2},observation_id=shot['id'])
         self.assertEqual(result['outcome'],'uncertain')
         events=[json.loads(line) for line in Path(result['record']).read_text().splitlines()]
         self.assertIn('dispatching',[e['kind'] for e in events])
@@ -241,7 +248,8 @@ class AgentServiceTests(unittest.TestCase):
         with self.assertRaises(BusyError):
             other.create_task({'web':'mail'})
         runtime.finish(task['id'], 'No action needed')
-        self.assertTrue(service.execute('tap','mail',x=1,y=2)['ok'])
+        shot = service.execute('screenshot', 'mail')
+        self.assertTrue(service.execute('tap','mail',x=1,y=2,observation_id=shot['id'])['ok'])
         other.create_task({'web':'mail'})
         self.assertTrue(Path(runtime.export(task['id'],str(self.root/'old-task.zip'))['path']).exists())
 
