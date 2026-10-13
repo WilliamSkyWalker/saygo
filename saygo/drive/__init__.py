@@ -1,6 +1,6 @@
-"""saygo-drive: 以 Claude Code 会话为主循环的人工驱动 driver。
+"""Agent 执行日志的报告渲染。
 
-由 .claude/skills/saygo-drive/SKILL.md 编排：Claude 边跑边维护
-journal.json，结尾调 saygo.drive.render 复用 saygo.qa.report.save_html
-生成与 saygo.cli run 一致样式的 HTML 报告。
+保留现有 journal.json 到 saygo.qa.report HTML 的转换；
+统一设备操作见 plugins/saygo-device/skills/device/SKILL.md，
+批量 QA 使用 saygo run。
 """

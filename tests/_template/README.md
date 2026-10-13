@@ -53,7 +53,7 @@ s3→accounts[2]；账号池小于设备数时报警并 fallback 到 [0]。
 
 **用例只写意图**（`check=首页曝光`），真实事件名/表名在插件 config 里映射。骨架见
 `probes/analytics.py.example`（Python）和 `probes/applog.sh.example`（子进程，任何语言），
-注册表见仓库根 `.saygo/probes.json.example`，完整文档 `docs/probes.md`。
+注册表见仓库根 `.saygo/probes.json.example`，完整文档 `docs/common/probes.md`。
 
 ## 跑起来
 

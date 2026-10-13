@@ -1,4 +1,4 @@
-include LICENSE AGENTS.md agent.md docs/README.md pyproject.toml setup.py MANIFEST.in
+include LICENSE AGENTS.md docs/README.md pyproject.toml setup.py MANIFEST.in
 include scripts/install_agent_plugin.py scripts/install_saygo.py scripts/build_release.py
 include scripts/build_desktop.py scripts/package_desktop.py scripts/desktop_windows.spec
 include scripts/check_desktop_build.py

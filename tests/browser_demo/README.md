@@ -14,4 +14,4 @@ SAYGO_TEST_CHROME=/path/to/chrome python3 -m unittest discover -s tests/browser_
 The integration test uses a temporary browser profile and a localhost HTTP fixture.
 It checks real input, popup discovery, reconnection across processes, persisted page selection,
 human handoff/resume and browser survival after controller shutdown. It does not access a real
-login provider or payment service. See [browser guide](../../docs/browser.md).
+login provider or payment service. See [browser guide](../../docs/playwright/README.md).

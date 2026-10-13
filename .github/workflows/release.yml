@@ -41,7 +41,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
-        run: gh release create "$RELEASE_TAG" dist/release/* --verify-tag --title "Saygo $RELEASE_TAG" --notes-file docs/distribution/RELEASE_NOTES.md
+        run: gh release create "$RELEASE_TAG" dist/release/* --verify-tag --title "Saygo $RELEASE_TAG" --notes-file docs/common/release-notes.md
   chrome-web-store:
     if: startsWith(github.ref, 'refs/tags/')
     needs: package

@@ -122,7 +122,7 @@ DEFAULT_CONFIG = {
     # 让「出现过又消失」的 toast/banner 等瞬态 UI 可被判断。<=1 = 关闭（只发单帧）。
     # 配合 mjpeg 时几乎零成本；无 mjpeg 时断言 step 会多截几张图。
     "AGENT_ASSERT_BURST_FRAMES": "3",
-    # settle 闸（性能优化 Phase 1，见 docs/perf-plan.md）：截图前先等屏幕"加载完/稳定"
+    # settle 闸（性能优化 Phase 1，见 docs/common/performance.md）：截图前先等屏幕"加载完/稳定"
     # 再决策/采样——全程零 LLM（visual_diff 帧稳 + 状态栏噪声 mask + 超时兜底）。
     # When 用稳态 1 帧；Then 采首/中/稳三点 + 2% 路由（静态→1 图，动态→3 图）。
     # 默认开；关掉则退回"每 turn 单帧截图 + 无条件多帧断言"的旧路径。

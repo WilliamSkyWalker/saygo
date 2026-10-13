@@ -14,4 +14,4 @@ SAYGO_TEST_MAC_BACKGROUND=1 python3 -m unittest discover -s tests/mac_demo -p te
 安装 `.[mac]`，开启屏幕录制和辅助功能权限，并保持桌面解锁；测试期间不要移动鼠标。
 测试验证原生按钮、中文/emoji 输入与删除、垂直滚动，以及前台 PID、鼠标和剪贴板保持不变。
 五项实机测试还覆盖 CLI 跨进程重连，以及 MCP stdio 连接、截图和基于截图的点击。
-它不代表所有应用或其他桌面 Space 都支持后台输入。使用方式及限制见 [control](../../docs/control.md#macos-background-mode)。
+它不代表所有应用或其他桌面 Space 都支持后台输入。使用方式及限制见 [control](../../docs/macos/README.md#后台模式)。

@@ -21,7 +21,7 @@ dependencies = ["Pillow>=10", "pip>=23.1"]
 [project.urls]
 Homepage = "https://saygo.work"
 Repository = "https://github.com/WilliamSkyWalker/saygo"
-Documentation = "https://github.com/WilliamSkyWalker/saygo/blob/main/docs/agent-control.md"
+Documentation = "https://github.com/WilliamSkyWalker/saygo/blob/main/docs/README.md"
 Issues = "https://github.com/WilliamSkyWalker/saygo/issues"
 
 [project.optional-dependencies]

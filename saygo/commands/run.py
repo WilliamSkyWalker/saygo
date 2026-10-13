@@ -53,7 +53,7 @@ def register(sub):
                             "对 cases 列表的硬切片，便于手动拆批跑。")
     run_p.add_argument("--bg", action="store_true",
                        help="Run in background (headless, silent)")
-    # 非视觉断言（probe 插件，见 docs/probes.md）的两种偏置跑法
+    # 非视觉断言（probe 插件，见 docs/common/probes.md）的两种偏置跑法
     probes_grp = run_p.add_mutually_exclusive_group()
     probes_grp.add_argument("--skip-probes", action="store_true",
                             help="Don't run probe steps (analytics etc.) — mark them "
@@ -262,7 +262,7 @@ def cmd_run(test: str, platform: str | None = None, url: str | None = None,
                      _n_probe, len(test_cases))
             if not _n_probe:
                 log.warning("没有任何 case 挂了 `# saygo-probe:` 声明 —— 本次将全部 skip。"
-                            "先确认用例里写了 directive（见 docs/probes.md）")
+                            "先确认用例里写了 directive（见 docs/common/probes.md）")
 
         if devices and len(devices) > 1:
             # 多 Android 设备：动态调度器，N worker 各持 Agent 抢任务

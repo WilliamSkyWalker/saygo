@@ -8,7 +8,7 @@
   < 2% → 窗口没动 = 静态断言 → 只送稳态 1 帧；≥ 2% → 有过程/动画/瞬态 → 送 3 帧。
 
 只用像素差（downscale + 状态栏 mask，histogram 快速统计），不调大模型。详见
-docs/perf-plan.md 的 Phase 1。
+docs/common/performance.md 的 Phase 1。
 """
 
 from __future__ import annotations

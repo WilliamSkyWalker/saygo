@@ -11,4 +11,4 @@ It covers cross-resource workflows, human handoff and verification, durable reco
 uncertain actions, resource ownership, stale observations, read-only database enforcement,
 and the real CLI entry point. It does not control devices or call an LLM.
 
-Workflow format and examples: [runtime guide](../../docs/runtime.md).
+Workflow format and examples: [runtime guide](../../docs/common/workflows.md).

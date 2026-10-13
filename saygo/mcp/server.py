@@ -5,7 +5,7 @@ MCP-aware 客户端不用每次 spawn ``python3 -m saygo.cli`` 就能：
   - 只读：list_targets / list_cases / list_runs / get_run_status / get_report
   - 跑测：run_target / run_case / cancel_run
   - 设备：list_devices / install_apk / adb_reconnect / setup_simulator
-  - 设备原语（/saygo-drive 用，Claude 当 brain）：device_screenshot /
+  - 设备原语（外部 Agent 决策，使用共享设备 Skill）：device_screenshot /
     device_tap / device_input / device_swipe / device_key /
     device_launch —— 通过共享持久会话服务控制 Android/iOS、浏览器和桌面
 

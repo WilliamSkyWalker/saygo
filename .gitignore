@@ -173,9 +173,8 @@ __marimo__/
 # Saygo project-specific
 # ─────────────────────────────────────────────────────
 
-# Claude Code local config (Bash 权限白名单等)；skills 是项目能力的一部分，入库
+# Claude Code 本地配置；共享操作 Skill 由 plugins/saygo-device 提供
 .claude/*
-!.claude/skills/
 
 # Qoder local settings
 .qoder/settings.local.json
