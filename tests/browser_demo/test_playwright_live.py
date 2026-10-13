@@ -3,6 +3,7 @@
 SAYGO_TEST_CHROME=/path/to/chrome python3 -m unittest discover -s tests/browser_demo -v
 """
 
+from contextlib import ExitStack
 import io
 import json
 import os
@@ -42,18 +43,18 @@ class Handler(BaseHTTPRequestHandler):
 @unittest.skipUnless(os.environ.get("SAYGO_TEST_CHROME"), "set SAYGO_TEST_CHROME for real-browser integration")
 class ChromiumIntegration(unittest.TestCase):
     def test_popup_reconnect_runtime_handoff_and_cli(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory() as tmp, ExitStack() as cleanup:
             root = Path(tmp)
             server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
-            self.addCleanup(server.server_close)
-            self.addCleanup(server.shutdown)
+            cleanup.callback(server.server_close)
+            cleanup.callback(server.shutdown)
             url = f"http://127.0.0.1:{server.server_port}"
             profile = root / "profile"
             # Test-only isolated browser; --no-sandbox supports restricted CI user namespaces.
             log = (root / "chrome.log").open("w+")
-            self.addCleanup(log.close)
+            cleanup.callback(log.close)
             proc = subprocess.Popen([os.environ["SAYGO_TEST_CHROME"], "--headless=new", "--no-sandbox",
                                      "--disable-dev-shm-usage", "--remote-debugging-port=0",
                                      f"--user-data-dir={profile}", "--no-first-run", "about:blank"],
@@ -228,11 +229,22 @@ finally: p.disconnect()
                     self.assertEqual(json.loads(out.stdout)["selected_page_id"], original)
                     self.assertIsNone(proc.poll())
             finally:
-                if platform is not None:
-                    platform.disconnect()
-                proc.terminate()
                 try:
-                    proc.wait(timeout=10)
-                except subprocess.TimeoutExpired:
-                    proc.kill()
-                    proc.wait(timeout=10)
+                    if platform is not None and platform._browser is not None:
+                        # Only this fixture owns the isolated browser. Ask Chrome to flush
+                        # and shut down its children before removing its profile directory.
+                        platform._browser.new_browser_cdp_session().send("Browser.close")
+                finally:
+                    try:
+                        if platform is not None:
+                            platform.disconnect()
+                    finally:
+                        try:
+                            proc.wait(timeout=10)
+                        except subprocess.TimeoutExpired:
+                            proc.terminate()
+                            try:
+                                proc.wait(timeout=10)
+                            except subprocess.TimeoutExpired:
+                                proc.kill()
+                                proc.wait(timeout=10)
