@@ -35,7 +35,7 @@ import time
 from pathlib import Path
 
 # mcp SDK 的服务端类在 2.0 改了名和位置：FastMCP → MCPServer（`mcp.server`）。
-# 我们只用 tool() / remove_tool() / run() 三个接口，两版签名兼容，故按版本取类即可。
+# 早期 1.x 没有 remove_tool，profile 裁剪另保留受检查的注册表兼容分支。
 try:                                          # mcp >= 2.0
     from mcp.server import MCPServer as _MCPServerClass
 except ImportError:                           # mcp 1.x
@@ -917,7 +917,17 @@ def _apply_profile(profile: str) -> None:
     failed = []
     for name in sorted(_RUN_PROFILE_ONLY):
         try:
-            mcp.remove_tool(name)
+            remove = getattr(mcp, 'remove_tool', None)
+            if callable(remove):
+                remove(name)
+            else:
+                # MCP 1.2 exposes its registration dictionary but no removal API.
+                # Unknown layouts must fail closed rather than expose QA tools.
+                manager = getattr(mcp, '_tool_manager', None)
+                registered = getattr(manager, '_tools', None)
+                if not isinstance(registered, dict) or not callable(getattr(manager, 'list_tools', None)):
+                    raise RuntimeError('Unsupported MCP tool registry')
+                registered.pop(name)
         except Exception as e:                       # mcp 版本不兼容 / 已改名
             failed.append(f"{name}({e})")
     if failed:

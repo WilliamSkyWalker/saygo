@@ -8,6 +8,26 @@ on:
 permissions:
   contents: read
 jobs:
+  mcp-sdk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        sdk: ['mcp==1.2.0', 'mcp>=1.2,<3']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install the selected MCP SDK
+        env:
+          SDK_SPEC: ${{ matrix.sdk }}
+        run: python -m pip install . "$SDK_SPEC"
+      - name: Verify stdio profiles and input schemas
+        run: python scripts/check_mcp_stdio.py
   core:
     runs-on: ubuntu-latest
     timeout-minutes: 15
