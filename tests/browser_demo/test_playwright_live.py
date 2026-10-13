@@ -179,16 +179,48 @@ finally: p.disconnect()
                     state = runtime.run(runtime.create(workflow)["id"])
                     self.assertEqual(state["status"], "waiting_for_human")
                     self.assertEqual(state["bindings"]["web"]["page_id"], original)
-                    # Simulate manual work; global CLI tab selection changes while paused.
-                    platform = PlaywrightBrowserPlatform().connect(endpoint, page_id=original)
-                    platform.open_target(url + "/done")
-                    manual = device_session.attach_browser("web", page_id=popup)
-                    manual.select_page(popup)
-                    manual.disconnect()
-                    self.assertEqual(device_session.load_state("web")["page_id"], popup)
-                    result = Runtime(Store(root / "runtime")).resume(state["id"], "Logged in")
-                    self.assertEqual(result["status"], "succeeded")
-                    self.assertEqual(result["outputs"]["after"]["page_id"], original)
+                    paused = device_session.load_state("web")
+                    self.assertEqual(paused["handoff"]["status"], "waiting_for_human")
+                    self.assertEqual(paused["handoff"]["task"], state["id"])
+                    self.assertEqual(paused["page_id"], original)
+                    with self.assertRaisesRegex(RuntimeError, "waiting_for_human"):
+                        device_session.attach_browser("web", page_id=popup)
+                    self.assertEqual(device_session.load_state("web"), paused)
+                    # Raw CDP simulates external fixture changes, not human input acceptance.
+                    # Paused Saygo commands stay blocked while the browser remains usable.
+                    external_script = '''import json,sys
+from playwright.sync_api import sync_playwright
+with sync_playwright() as playwright:
+    browser = playwright.chromium.connect_over_cdp(sys.argv[1])
+    pages = {}
+    for context in browser.contexts:
+        for page in context.pages:
+            cdp = context.new_cdp_session(page)
+            target = cdp.send("Target.getTargetInfo")["targetInfo"]["targetId"]
+            cdp.detach()
+            pages[target] = page
+    pages[sys.argv[2]].goto(sys.argv[4])
+    pages[sys.argv[3]].bring_to_front()
+    print(json.dumps({"url": pages[sys.argv[2]].url}))
+'''
+                    external = subprocess.run(
+                        [sys.executable, "-c", external_script, endpoint, original, popup, url + "/done"],
+                        env=env, capture_output=True, text=True, check=True, timeout=30)
+                    self.assertEqual(json.loads(external.stdout)["url"], url + "/done")
+                    self.assertEqual(device_session.load_state("web"), paused)
+                    result = Runtime(Store(root / "runtime")).resume(
+                        state["id"], "External fixture changes completed by the automated test")
+                    self.assertEqual(result["status"], "succeeded", result.get("error"))
+                    after = result["outputs"]["after"]
+                    self.assertEqual(after["page_id"], original)
+                    self.assertEqual(after["url"], url + "/done")
+                    self.assertNotEqual(after["id"], state["outputs"]["before"]["id"])
+                    with Image.open(after["path"]) as shot:
+                        self.assertGreater(shot.width, 0)
+                        self.assertGreater(shot.height, 0)
+                    resumed = device_session.load_state("web")
+                    self.assertEqual(resumed["page_id"], original)
+                    self.assertNotIn("handoff", resumed)
                     switched_workflow = {"version": 1,
                         "resources": {"web": {"kind": "browser", "session": "web", "page_id": original}},
                         "steps": [
@@ -215,6 +247,7 @@ finally: p.disconnect()
                     out = subprocess.run(command + ["select-page", popup, "--serial", "web"], env=env,
                                          capture_output=True, text=True, check=True, timeout=30)
                     self.assertEqual(json.loads(out.stdout)["selected_page_id"], popup)
+                    platform = PlaywrightBrowserPlatform().connect(endpoint, page_id=original)
                     platform.close_page(popup)
                     with self.assertRaises(PageSelectionError):
                         device_session.attach_browser("web")

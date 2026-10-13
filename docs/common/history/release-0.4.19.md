@@ -66,6 +66,23 @@ site-packages；用户实际输入确认与 Agent 自动注入分开记录，业
 局部性能数据不衡量设备截图、模型时延、完整任务耗时或业务通过率。
 旧 0.4.18 的三平台安装、桌面构建和商店审核结果也不能充当本版验收。
 
+## 发布检查中的测试修正
+
+首次标签流程 [38434890955](https://github.com/WilliamSkyWalker/saygo/actions/runs/38434890955)
+在真实 Playwright 检查中失败，因此 build、smoke 和 publish 均未执行。
+四项真实扩展测试通过，但旧 Playwright 用例在 workflow 暂停后仍通过
+`device_session.attach_browser` 改变选页，被新增的持久接管保护正确拒绝；
+本地独立 Chromium 也复现了同一错误。
+
+修正只涉及验证：用例先断言自动连接被拒绝，再经独立原生 Playwright/CDP
+模拟外部页面变化，检查原绑定、暂停状态及 resume 的新观察。它是自动化模拟，
+不计作用户人工输入验收。人工输入证据仍来自前述独立 Android 测试中的两次
+用户确认。
+
+手动重验既有标签时，浏览器 job 仅从调用方固定 SHA 取修正的
+`tests/browser_demo/test_playwright_live.py`；产品源码与独立构建 job 仍使用
+不可变 `v0.4.19`。没有移动标签、追加产品版本或跳过回归/安装门禁。
+
 ## 0.4.19 发布与安装状态
 
 | 项目 | 当前状态 |
