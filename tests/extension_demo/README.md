@@ -8,6 +8,46 @@ python3 -m unittest discover -s tests/extension_demo -p test_bridge.py -v
 python3 -m unittest discover -s tests/extension_demo -p test_shared_bridge.py -v
 ```
 
+`test_startup.mjs` covers the saved connection choice across fresh browser
+sessions, first install/legacy defaults, Release and Chrome Cancel, host failure,
+concurrent Connect, late handshake/network setup, pending debugger cleanup, and
+storage failures. It uses mock Chrome APIs and does not replace browser restart
+acceptance. A failed preference write reports an error and an unknown startup
+state while still revoking current control on Release.
+
+`test_startup_live.py` uses a disposable profile and a real installed extension,
+native host and CLI. It connects and enters text in its own localhost fixture,
+closes and restarts Chromium, checks automatic reconnect and rejection of the old
+page ID, explicitly selects the new page and checks fresh screenshots/input,
+then releases and restarts again to check that control stays off. It never
+injects a synthetic startup event. Run with `SAYGO_TEST_CHROME` and
+`SAYGO_TEST_HEADED=1` under Xvfb with `xdotool` installed; the headed CI runner
+includes this test. The browser's Load unpacked directory picker installs the
+extension persistently. Command-line `--load-extension` treats it as a new
+installation each launch and cannot validate the normal startup event.
+
+Startup validation on 2026-10-14 (unreleased source):
+
+- Linux/WSL, Chrome for Testing 153.0.8010.12: the final persistent-install test
+  reproduced the old source's failure after browser restart, then passed with
+  the fix. The headed run used the real popup, native host and CLI, verified PNG
+  screenshots and English/Chinese fixture input, and retained the closed state
+  after Release and another restart. The final screenshot was also inspected.
+- 73 Node checks passed, including 22 startup/revocation regressions; 17 bridge
+  and 14 shared-bridge checks passed with synthetic extension peers.
+- All four existing real-extension cases passed in headless Chromium, including
+  CLI/network payload and MCP client restart checks. This is separate from the
+  headed browser restart case above.
+- Chrome Cancel and storage/connection fault cases have mock coverage only.
+  Windows/macOS restart acceptance and the Openbox CI runner were not run locally.
+  No installed user extension was reloaded or upgraded.
+
+```sh
+SAYGO_TEST_CHROME=/path/to/chrome SAYGO_TEST_HEADED=1 \
+  xvfb-run -a -s '-screen 0 1600x1000x24' \
+  python3 -m unittest discover -s tests/extension_demo -p test_startup_live.py -v
+```
+
 Shared-bridge regression tests reproduce the desktop/WSL split installation,
 both installation orders, stale defaults/registration, multiple live hosts,
 identity migration, and preservation of explicit page bindings. They run real

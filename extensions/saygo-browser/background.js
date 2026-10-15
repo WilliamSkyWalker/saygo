@@ -13,7 +13,7 @@ async function startNetwork(tabId, explicit = false) {
   const job = (async () => {
     await permissions;
     const data = await state();
-    if (data.blocked.includes(tabId)) return;
+    if (!port || !negotiated || ticket !== generation || networkPaused.has(tabId) || data.blocked.includes(tabId)) return;
     await attach(tabId);
     if (!port || ticket !== generation || networkPaused.has(tabId)) return;
     network.begin(tabId);
@@ -50,6 +50,13 @@ const READ_OPERATIONS = new Set(["pages", "metadata", "diagnose", "size", "scree
 const attached = new Set();
 const attaching = new Map();
 let generation = 0;
+let connectionAttempt = null;
+let disconnecting = Promise.resolve();
+let reconnectOnStartup = false;
+let preferenceKnown = false;
+let preferenceError = "";
+let preferenceRevision = 0;
+let preferenceWrites = Promise.resolve();
 let permissions = Promise.resolve();
 function updateBlocked(change) {
   permissions = permissions.then(async () => {
@@ -69,14 +76,42 @@ async function state() {
   data.blocked ||= [];
   return data;
 }
+function saveStartupPreference(enabled) {
+  const revision = ++preferenceRevision;
+  reconnectOnStartup = enabled;
+  preferenceKnown = false;
+  preferenceError = "";
+  const write = preferenceWrites.catch(() => {}).then(() =>
+    chrome.storage.local.set({reconnectOnStartup:enabled})).then(() => {
+    if (revision === preferenceRevision) preferenceKnown = true;
+  });
+  preferenceWrites = write;
+  return write.catch(error => {
+    const message = `Could not save startup connection preference: ${error.message || error}`;
+    if (revision === preferenceRevision) preferenceError = message;
+    throw new Error(message);
+  });
+}
+// Never infer permission from a legacy installation or sync it to another browser.
+const preferenceReady = chrome.storage.local.get(["reconnectOnStartup"]).then(data => {
+  if (preferenceRevision === 0) {
+    reconnectOnStartup = data.reconnectOnStartup === true;
+    preferenceKnown = true;
+  }
+}).catch(error => {
+  if (preferenceRevision === 0)
+    preferenceError = `Could not read startup connection preference: ${error.message || error}`;
+});
 // Initialize before either UI or bridge requests touch shared state.
-const ready = state();
+const ready = Promise.all([state(), preferenceReady]);
 function webURL(url) { return /^https?:\/\//i.test(url || ""); }
 async function pages() {
+  const ticket = generation;
   await permissions;
   const data = await state();
   if (!port || !negotiated) return [];
   const tabs = await chrome.tabs.query({});
+  if (ticket !== generation || !port || !negotiated) return [];
   return tabs.filter(t => !data.blocked.includes(t.id) && webURL(t.pendingUrl || t.url)).map(t => ({
     page_id: `${data.epoch}:${t.id}`, url: t.pendingUrl || t.url, title: t.title || "",
     opener_id: t.openerTabId ? `${data.epoch}:${t.openerTabId}` : null
@@ -142,71 +177,136 @@ function captureNotice(trace) {
     "请勿重复点击或发送消息；取得新截图后先核对上一次操作结果。无需重连插件。";
 }
 async function detachAll() {
-  network.reset(); networkPaused.clear();
+  // Pending attaches observe the revoked generation and detach before we reconnect.
+  await Promise.allSettled([...attaching.values()]);
+  network.reset(); networkPaused.clear(); networkStarting.clear();
   await Promise.all([...attached].map(id => chrome.debugger.detach({tabId:id}).catch(() => {})));
   attached.clear();
   captureStreams.clear();
 }
-async function connect() {
-  if (port) return;
-  await updateBlocked(() => []);
-  const current = chrome.runtime.connectNative("com.saygo.browser");
-  port = current;
+function clearConnection(error = new Error("Control was released")) {
+  generation++;
+  connectionAttempt?.cancel(error);
+  const old = port;
+  port = null;
   negotiated = false;
-  connectionError = "";
-  let accept, reject;
-  const handshake = new Promise((resolve, fail) => { accept = resolve; reject = fail; });
-  const timer = setTimeout(() => reject(new Error('Bridge handshake timed out. Update the local host and reload this extension.')), 10000);
-  current.onDisconnect.addListener(() => {
-    const disconnectError = chrome.runtime.lastError?.message || "Disconnected";
-    if (port === current) connectionError = disconnectError;
-    if (port === current) { port = null; negotiated = false; generation++; void detachAll(); }
-    reject(new Error(connectionError));
+  // A new connection must not race old debugger detachment and global cleanup.
+  disconnecting = disconnecting.catch(() => {}).then(() => detachAll());
+  return old;
+}
+function connect(automatic = false) {
+  if (connectionAttempt?.generation === generation) return connectionAttempt.promise;
+  if (port) return !automatic && negotiated ? saveStartupPreference(true) : Promise.resolve();
+  const ticket = generation, preferenceTicket = preferenceRevision;
+  const attempt = {generation:ticket};
+  const canceled = new Promise((_, reject) => {
+    attempt.cancel = reject;
   });
-  current.onMessage.addListener(request => {
-    if (request.type === 'hello') {
-      if (request.protocol !== PROTOCOL) {
-        reject(new Error('Bridge protocol mismatch. Update the local host and extension together.'));
+  const wait = work => Promise.race([work, canceled]);
+  const check = () => {
+    if (ticket !== generation) throw new Error("Control was released");
+  };
+  connectionAttempt = attempt;
+  attempt.promise = (async () => {
+    await wait(ready);
+    await wait(disconnecting);
+    check();
+    await wait(updateBlocked(() => []));
+    check();
+    const current = chrome.runtime.connectNative("com.saygo.browser");
+    port = current;
+    negotiated = false;
+    connectionError = "";
+    let accept, reject;
+    const handshake = new Promise((resolve, fail) => { accept = resolve; reject = fail; });
+    const timer = setTimeout(() => reject(new Error('Bridge handshake timed out. Update the local host and reload this extension.')), 10000);
+    current.onDisconnect.addListener(() => {
+      if (port !== current) return;
+      connectionError = chrome.runtime.lastError?.message || "Disconnected";
+      // Native failure and browser shutdown do not revoke the user's saved choice.
+      const error = new Error(connectionError);
+      clearConnection(error);
+      reject(error);
+    });
+    current.onMessage.addListener(request => {
+      if (port !== current || ticket !== generation) return;
+      if (request.type === 'hello') {
+        if (request.protocol !== PROTOCOL) {
+          reject(new Error('Bridge protocol mismatch. Update the local host and extension together.'));
+          return;
+        }
+        current.postMessage({type:'hello', protocol:PROTOCOL, version:chrome.runtime.getManifest().version});
+        negotiated = true;
+        accept();
         return;
       }
-      current.postMessage({type:'hello', protocol:PROTOCOL, version:chrome.runtime.getManifest().version});
-      negotiated = true;
-      accept();
-      return;
-    }
-    if (!negotiated) { reject(new Error('Local host needs an update: no compatible handshake.')); return; }
-    const ticket = generation;
-    void (async () => {
-      let response;
-      try {
-        await ready;
-        if (port !== current || ticket !== generation) throw new Error("Control was released");
-        if (Date.now() / 1000 >= request.deadline) throw new Error("Request expired before dispatch");
-        response = {result: await runRequest(request.operation, request.arguments, request.id)};
-      } catch (error) { response = {error: String(error.message || error)}; }
-      const text = JSON.stringify(response);
-      // Native host receives <= 1 MiB per frame, including Unicode JSON overhead.
-      for (let i = 0; i < text.length;) {
-        if (port !== current) return;
-        let end = Math.min(i + 100000, text.length);
-        // Python joins decoded frames as Unicode code points, so a UTF-16
-        // surrogate pair must travel in the same native message.
-        const last = text.charCodeAt(end - 1);
-        if (end < text.length && last >= 0xD800 && last <= 0xDBFF) end--;
-        current.postMessage({id: request.id, chunk: text.slice(i, end), last: end >= text.length});
-        i = end;
-      }
-    })().catch(error => { connectionError = String(error); });
-  });
-  try { await handshake; }
-  catch (error) {
-    connectionError = String(error.message || error);
-    // A failed handshake reports an error but never closes the user-owned port.
+      if (!negotiated) { reject(new Error('Local host needs an update: no compatible handshake.')); return; }
+      void (async () => {
+        let response;
+        try {
+          await ready;
+          if (port !== current || ticket !== generation) throw new Error("Control was released");
+          if (Date.now() / 1000 >= request.deadline) throw new Error("Request expired before dispatch");
+          response = {result: await runRequest(request.operation, request.arguments, request.id)};
+        } catch (error) { response = {error: String(error.message || error)}; }
+        const text = JSON.stringify(response);
+        // Native host receives <= 1 MiB per frame, including Unicode JSON overhead.
+        for (let i = 0; i < text.length;) {
+          if (port !== current) return;
+          let end = Math.min(i + 100000, text.length);
+          // Python joins decoded frames as Unicode code points, so a UTF-16
+          // surrogate pair must travel in the same native message.
+          const last = text.charCodeAt(end - 1);
+          if (end < text.length && last >= 0xD800 && last <= 0xDBFF) end--;
+          current.postMessage({id: request.id, chunk: text.slice(i, end), last: end >= text.length});
+          i = end;
+        }
+      })().catch(error => { connectionError = String(error); });
+    });
+    try { await wait(handshake); }
+    finally { clearTimeout(timer); }
+    check();
+    // Cancel only revokes future startup access; it does not release other tabs.
+    if (!automatic && preferenceTicket === preferenceRevision)
+      await wait(saveStartupPreference(true));
+    check();
+    const available = await wait(pages());
+    check();
+    // Default capture covers every controllable existing tab, without a second prompt.
+    await wait(Promise.all(available.map(p => autoNetwork(Number(p.page_id.split(':').at(-1))))));
+  })().catch(error => {
+    // Handshake failure reports an error but does not close the user-owned port.
+    if (ticket === generation) connectionError = String(error.message || error);
     throw error;
-  } finally { clearTimeout(timer); }
-  // Default capture covers every controllable existing tab, without a second prompt.
-  await Promise.all((await pages()).map(p => autoNetwork(Number(p.page_id.split(':').at(-1)))));
+  }).finally(() => {
+    if (connectionAttempt === attempt) connectionAttempt = null;
+  });
+  return attempt.promise;
 }
+async function release() {
+  // Revoke access before any asynchronous preference read or write can finish.
+  const old = clearConnection();
+  connectionError = "Control released";
+  const saved = saveStartupPreference(false);
+  old?.disconnect();
+  const results = await Promise.allSettled([
+    saved, disconnecting, ready.then(() => updateBlocked(() => []))
+  ]);
+  const failure = results.find(result => result.status === "rejected");
+  if (failure) throw failure.reason;
+}
+let startupHandled = false;
+chrome.runtime.onStartup.addListener(() => {
+  if (startupHandled) return;
+  startupHandled = true;
+  const ticket = generation, revision = preferenceRevision;
+  void ready.then(() => {
+    if (ticket === generation && revision === preferenceRevision && preferenceKnown && reconnectOnStartup)
+      return connect(true);
+  }).catch(error => {
+    if (ticket === generation) connectionError = String(error.message || error);
+  });
+});
 // Input stays serialized while an underlying browser call is unresolved. Reads
 // remain available, including after a timed-out input. Never replay old input.
 async function runRequest(operation, args = {}, requestId = null) {
@@ -246,6 +346,7 @@ async function runRequest(operation, args = {}, requestId = null) {
   } finally { clearTimeout(timer); }
 }
 async function execute(operation, args = {}, trace = {}) {
+  const ticket = generation;
   const command = async (tabId, method, params) => {
     trace.stage = method;
     trace.stageStarted = Date.now();
@@ -293,6 +394,7 @@ async function execute(operation, args = {}, trace = {}) {
     return {page_id:`${data.epoch}:${tab.id}`};
   }
   const tabId = await target(args.page_id);
+  if (ticket !== generation) throw new Error("Control was released");
   if (operation === "diagnose") {
     return {capture_mode:"cdp_surface", sampled_at_ms:Date.now(), page_id:args.page_id, ...await captureState(tabId),
       debug:{worker_started_at_ms:debugStarted, worker_uptime_ms:Date.now()-debugStarted,
@@ -331,6 +433,7 @@ async function execute(operation, args = {}, trace = {}) {
   await attach(tabId);
   // Control can be released while attach is pending.
   await target(args.page_id);
+  if (ticket !== generation) throw new Error("Control was released");
   if (operation === "size" || operation === "screenshot") {
     const ticket = generation;
     if (!captureDocuments.has(tabId)) captureDocuments.set(tabId, {});
@@ -477,7 +580,10 @@ chrome.debugger.onDetach.addListener(({tabId}, reason) => {
   attached.delete(tabId);
   network.end(tabId, reason);
   // Chrome's "Cancel" control must not be undone by automatic reattachment.
-  if (reason === "canceled_by_user") void updateBlocked(blocked => [...new Set([...blocked, tabId])]);
+  if (reason === "canceled_by_user") {
+    void saveStartupPreference(false).catch(() => {});
+    void updateBlocked(blocked => [...new Set([...blocked, tabId])]);
+  }
 });
 chrome.debugger.onEvent.addListener((source, method, params) => {
   if (method === "Page.screencastFrame") {
@@ -510,20 +616,18 @@ chrome.tabs.onRemoved.addListener(tabId => {
   attached.delete(tabId);
   void updateBlocked(blocked => blocked.filter(id => id !== tabId));
 });
+function connectionStatus() {
+  return {connected:!!port && negotiated,error:preferenceError || connectionError,
+    reconnect_on_startup:preferenceKnown ? reconnectOnStartup : null,
+    protocol:PROTOCOL,version:chrome.runtime.getManifest().version};
+}
 chrome.runtime.onMessage.addListener((message, sender, reply) => {
   if (sender.id !== chrome.runtime.id) return false;
   (async () => {
-    await ready;
     if (message.type === "connect") await connect();
-    else if (message.type === "release") {
-      generation++;
-      const old = port; port = null; negotiated = false;
-      await updateBlocked(() => []);
-      old?.disconnect();
-      await detachAll();
-      connectionError = "Control released";
-    }
-    return {connected:!!port && negotiated,error:connectionError,pages:await pages(),protocol:PROTOCOL,version:chrome.runtime.getManifest().version};
-  })().then(reply, error => reply({error:String(error.message || error)}));
+    else if (message.type === "release") await release();
+    else await ready;
+    return {...connectionStatus(),pages:await pages()};
+  })().then(reply, error => reply({...connectionStatus(),error:String(error.message || error)}));
   return true;
 });

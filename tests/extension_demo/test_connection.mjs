@@ -21,11 +21,11 @@ function browser(tabs = [{id:1,url:'https://example.test'}]) {
     setTimeout:clock.setTimeout,clearTimeout:clock.clearTimeout,Date:clock.Date,
     NetworkJournal:class {},
     chrome:{
-      storage:{session:{get:async () => ({epoch:'test',blocked:[]}),set:async () => {}}},
+      storage:{local:{get:async () => ({}),set:async () => {}},session:{get:async () => ({epoch:'test',blocked:[]}),set:async () => {}}},
       tabs:{query:async () => tabs, remove:async id => removed.push(id),
         onCreated:listener,onUpdated:listener,onRemoved:listener},
       debugger:{onDetach:listener,onEvent:listener},
-      runtime:{connectNative:() => port,onMessage:listener,getManifest:() => ({version:'test'})}
+      runtime:{onStartup:listener,connectNative:() => port,onMessage:listener,getManifest:() => ({version:'test'})}
     }
   });
   vm.runInContext(source.replace("import {NetworkJournal} from './network.js';", ''), context);

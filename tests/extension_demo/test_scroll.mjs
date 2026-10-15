@@ -13,7 +13,7 @@ function browser(handler = async () => {}) {
     setTimeout:clock.setTimeout,clearTimeout:clock.clearTimeout,Date:clock.Date,
     NetworkJournal: class {},
     chrome: {
-      storage: {session: {get: async () => ({epoch:'test', blocked:[]})}},
+      storage: {local:{get:async () => ({}),set:async () => {}},session: {get: async () => ({epoch:'test', blocked:[]})}},
       tabs: {query: async () => [{id:1,url:'https://example.test'}],
         onCreated:listener,onUpdated:listener,onRemoved:listener},
       debugger: {attach:async () => {},onDetach:listener,onEvent:listener,
@@ -22,7 +22,7 @@ function browser(handler = async () => {}) {
           events.push({target,method,params});
           return handler(method,params);
         }},
-      runtime: {onMessage:listener}
+      runtime: {onStartup:listener,onMessage:listener}
     }
   });
   vm.runInContext(source.replace("import {NetworkJournal} from './network.js';", '') + '\nport = {}; negotiated = true;', context);

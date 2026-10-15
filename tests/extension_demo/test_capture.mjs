@@ -15,7 +15,7 @@ function browser({state='normal', active=false, command} = {}) {
     setTimeout:clock.setTimeout, clearTimeout:clock.clearTimeout, Date:clock.Date,
     NetworkJournal:class { tabs=new Map(); end() {} reset() {} },
     chrome:{
-      storage:{session:{get:async () => ({epoch:'test',blocked:[]}),set:async () => {}}},
+      storage:{local:{get:async () => ({}),set:async () => {}},session:{get:async () => ({epoch:'test',blocked:[]}),set:async () => {}}},
       tabs:{query:async () => tabs,get:async id => tabs.find(t => t.id === id),
         update:async () => {throw new Error('Capture must not activate a tab');},
         onCreated:listener,onUpdated:{addListener(fn) {events.updated=fn;}},onRemoved:{addListener(fn) {events.removed=fn;}}},
@@ -29,7 +29,7 @@ function browser({state='normal', active=false, command} = {}) {
           if (method === 'Page.getLayoutMetrics') return {cssVisualViewport:{clientWidth:800,clientHeight:600,pageX:0,pageY:30}};
           if (method === 'Page.captureScreenshot') return {data:'fresh-image'};
         }},
-      runtime:{id:"test-extension",onMessage:{addListener(fn) {events.message=fn;}}}
+      runtime:{onStartup:listener,id:"test-extension",getManifest:() => ({version:'test'}),onMessage:{addListener(fn) {events.message=fn;}}}
     }
   });
   vm.runInContext(source.replace("import {NetworkJournal} from './network.js';", '')+'\nport = {disconnect() {}}; negotiated = true; networkPaused.add(1); networkPaused.add(2);',context);

@@ -37,6 +37,10 @@ python -m saygo.integrations.browser_setup --extension-id ehomcchjfomfkcmbeinlcm
 
 打开普通网页，在扩展弹窗点击 **Connect local bridge（连接本地桥）**，再重启 Agent 客户端。连接后所有现有及新增网站标签页都可发现，不需逐页分享。Chrome 可能显示正常的调试控制提示条。
 
+当前源码会在本浏览器配置中记住连接开关：成功连接后，下次启动浏览器自动连接一次；点击 **Release browser and disconnect（释放浏览器并断开）** 后，重启仍保持关闭。弹窗显示下次启动是否连接。首次安装或旧版本没有记录时默认关闭，需要手动连接一次；普通后台 worker 唤醒或扩展重载不会触发自动连接。此改动尚未发布到商店，已有安装版不会因 Python 包升级而获得该行为。
+
+本地桥异常退出时保留上次开启意图，当次显示连接错误、不循环重试；下次浏览器启动仍尝试一次。偏好保存失败会明确报错，释放仍撤销当次控制，但不能保证下次启动状态已保存。开关仅存于本配置，不同步到其他浏览器。实现使用 Chrome 的 [启动事件](https://developer.chrome.com/docs/extensions/reference/api/runtime#event-onStartup) 和 [本地扩展存储](https://developer.chrome.com/docs/extensions/reference/api/storage#storage-areas)。
+
 ## 升级与开发版本
 
 ```sh
@@ -113,7 +117,7 @@ new-page 仅接受 HTTP(S)，返回 `created_page_id`，保留原目标，需 se
 
 新标签/弹窗自动可发现但不替换已选目标。人工步骤让用户在原页面工作，之后显式 resume 并独立检查结果。见[扩展接管示例](../../examples/workflows/extension_handoff.json)和[工作流](../common/workflows.md)；示例 URL 检查只证明导航，不证明支付成功。
 
-扩展弹窗的 **Release browser and disconnect（释放浏览器并断开）** 由用户主动撤销控制并清空内存网络记录，不能撤销已派发动作。Chrome 调试器的 Cancel 会禁止该页，须用户断开后重连。释放/断连后重连，浏览器重启后还须重新选页。
+扩展弹窗的 **Release browser and disconnect（释放浏览器并断开）** 由用户主动撤销控制并清空内存网络记录，不能撤销已派发动作。Chrome 调试器的 Cancel 会禁止该页，须用户断开后重连；当前源码还会关闭下次浏览器启动的自动连接，避免重启绕过取消。关闭普通标签页不改变连接开关。自动恢复只恢复浏览器桥，浏览器重启后原页面 ID 失效，仍须显式重新选页；不会自动重绑旧任务或重放操作。
 
 CLI 退出只断开适配器，不关闭 Chrome；device stop 移除保存的扩展绑定，全局撤销访问仍通过扩展。超时、无效响应和握手错误不得关闭 native port，迟到回执按请求 ID 忽略。在途输入结束前拒绝第二次输入，但查询和截图可继续。普通 device 与任务共用资源锁，人工仍可能在观察和输入之间改变页面。
 

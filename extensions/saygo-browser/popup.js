@@ -4,6 +4,7 @@ async function update(type) {
     document.getElementById("status").textContent =
       "Saygo " + chrome.runtime.getManifest().version + "\n" +
       (data.connected ? "Connected" : "Disconnected") + (data.error ? "\n" + data.error : "") +
+      "\nReconnect on browser startup: " + (data.reconnect_on_startup === true ? "On" : data.reconnect_on_startup === false ? "Off" : "Unknown") +
       "\n\nAvailable tabs:\n" + (data.pages || []).map(p => p.title + "\n" + p.page_id).join("\n\n");
   } catch (error) { document.getElementById("status").textContent = String(error); }
 }

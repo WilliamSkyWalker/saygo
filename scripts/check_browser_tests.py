@@ -1,6 +1,7 @@
-"""Bounded headed integration gate. Run under xvfb-run with Openbox installed."""
+"""Bounded headed integration gate. Requires Xvfb, Openbox and xdotool."""
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import time
@@ -12,6 +13,8 @@ def main():
         chrome = pw.chromium.executable_path
     if not Path(chrome).is_file():
         raise SystemExit('Install Chromium with: python -m playwright install chromium')
+    if not shutil.which('xdotool'):
+        raise SystemExit('Install xdotool for the browser restart installation check')
     root = Path(__file__).resolve().parents[1]
     manager = subprocess.Popen(['openbox', '--sm-disable'], stdout=subprocess.DEVNULL,
                                stderr=subprocess.DEVNULL)
@@ -28,6 +31,9 @@ def main():
         subprocess.run([sys.executable, '-m', 'unittest', 'discover', '-s',
                         'tests/extension_demo', '-p', 'test_live.py', '-v'],
                        cwd=root, env=env, check=True, timeout=360)
+        subprocess.run([sys.executable, '-m', 'unittest', 'discover', '-s',
+                        'tests/extension_demo', '-p', 'test_startup_live.py', '-v'],
+                       cwd=root, env=env, check=True, timeout=180)
         subprocess.run([sys.executable, '-m', 'unittest', 'discover', '-s',
                         'tests/browser_demo', '-p', 'test_playwright_live.py', '-v'],
                        cwd=root, env=env, check=True, timeout=120)
