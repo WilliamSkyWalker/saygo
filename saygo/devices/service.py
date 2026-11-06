@@ -41,6 +41,7 @@ def _execute(args):
     plat = None
     submission_attempted = False
     dispatched = False
+    after_observation = None
     supported = {"start", "stop", "pages", "select-page", "close-page", "new-page", "open", "scroll",
                  "navigate", "screenshot", "focus", "tap", "swipe", "input", "type-send", "key", "launch",
                  "capabilities", "diagnose", "wait", "act"}
@@ -148,7 +149,8 @@ def _execute(args):
             _record(args.record, "dispatched", result)
             if args.observe_after:
                 result["wait"] = observations.wait(plat, "stable", args.timeout)
-                result["observation"] = _shot(plat, args.out)
+                after_observation = _shot(plat, args.out)
+                result["observation"] = after_observation
             return result
         if cmd not in {"screenshot", "focus"}:
             action = _legacy_action(cmd, args, plat)
@@ -255,7 +257,9 @@ def _execute(args):
                     if cmd in {"new-page", "select-page", "close-page"}:
                         _page_evidence(plat, serial, args.record, "after")
                     else:
-                        _record(args.record, "after", _shot(plat, None))
+                        # Reuse act's completed after-capture so journaling does not age it.
+                        _record(args.record, "after", after_observation if after_observation is not None
+                                else _shot(plat, None))
                 except Exception as exc:
                     _record(args.record, "observation_failed", {"error": str(exc)})
         finally:

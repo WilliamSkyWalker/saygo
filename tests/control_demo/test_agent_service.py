@@ -146,6 +146,63 @@ class AgentServiceTests(unittest.TestCase):
             self.assertFalse(service.execute('tap', 'missing', x=1,y=2)['ok'])
             start.assert_not_called()
 
+    def test_act_observe_after_reuses_returned_observation_for_journal(self):
+        shot = service.execute('screenshot', 'mail')
+        # A distinct post-input frame also proves the journal never reuses "before".
+        def tap(x, y):
+            self.device.calls.append(('tap', x, y))
+            self.device.frame = png('black')
+        with patch.object(self.device, 'tap', side_effect=tap), \
+                patch.object(self.device, 'screenshot_raw', wraps=self.device.screenshot_raw) as screenshot, \
+                patch.object(observations, 'wait', return_value={'condition_met': True}):
+            result = service.execute('act', 'mail', action={'type':'tap','x':20,'y':30},
+                                     observation_id=shot['id'], observe_after=True)
+        self.assertTrue(result['ok'], result)
+        events = [json.loads(line) for line in Path(result['record']).read_text().splitlines()]
+        after = [event['data'] for event in events if event['kind'] == 'after']
+        before = next(event['data']['before'] for event in events if event['kind'] == 'dispatching')
+        self.assertEqual(after, [result['observation']])
+        self.assertNotEqual(after[0]['id'], before['id'])
+        self.assertEqual(Path(after[0]['source_path']).read_bytes(), png('black'))
+        self.assertEqual(Path(before['source_path']).read_bytes(), png())
+        self.assertEqual(screenshot.call_count, 3)  # Revalidate, before, returned after.
+        self.assertEqual(self.device.calls, [('tap',20,30)])
+
+    def test_act_without_observe_after_still_captures_journal_evidence(self):
+        shot = service.execute('screenshot', 'mail')
+        with patch.object(self.device, 'screenshot_raw', side_effect=[png(), png(), png('black')]) as screenshot:
+            result = service.execute('act', 'mail', action={'type':'tap','x':20,'y':30},
+                                     observation_id=shot['id'])
+        self.assertTrue(result['ok'], result)
+        self.assertNotIn('observation', result)
+        events = [json.loads(line) for line in Path(result['record']).read_text().splitlines()]
+        after = [event['data'] for event in events if event['kind'] == 'after']
+        before = next(event['data']['before'] for event in events if event['kind'] == 'dispatching')
+        self.assertEqual(len(after), 1)
+        self.assertNotEqual(after[0]['id'], before['id'])
+        self.assertEqual(Path(after[0]['source_path']).read_bytes(), png('black'))
+        self.assertEqual(screenshot.call_count, 3)
+        self.assertEqual(self.device.calls, [('tap',20,30)])
+
+    def test_act_failed_observe_after_retries_capture_only_for_journal(self):
+        shot = service.execute('screenshot', 'mail')
+        with patch.object(self.device, 'screenshot_raw', side_effect=[
+                png(), png(), RuntimeError('after capture interrupted'), png('black')]) as screenshot, \
+                patch.object(observations, 'wait', return_value={'condition_met': True}):
+            result = service.execute('act', 'mail', action={'type':'tap','x':20,'y':30},
+                                     observation_id=shot['id'], observe_after=True)
+        self.assertFalse(result['ok'], result)
+        self.assertEqual(result['outcome'], 'uncertain')
+        self.assertIn('after capture interrupted', result['error'])
+        events = [json.loads(line) for line in Path(result['record']).read_text().splitlines()]
+        after = [event['data'] for event in events if event['kind'] == 'after']
+        before = next(event['data']['before'] for event in events if event['kind'] == 'dispatching')
+        self.assertEqual(len(after), 1)
+        self.assertNotEqual(after[0]['id'], before['id'])
+        self.assertEqual(Path(after[0]['source_path']).read_bytes(), png('black'))
+        self.assertEqual(screenshot.call_count, 4)
+        self.assertEqual(self.device.calls, [('tap',20,30)])
+
     def test_mutual_exclusion_and_global_desktop_key(self):
         with resource_guard(session_keys('mail')):
             result = service.execute('tap','mail',x=1,y=2)
