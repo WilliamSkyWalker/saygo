@@ -416,8 +416,8 @@ async function execute(operation, args = {}, trace = {}) {
     return network.read(tabId, operation === 'network_read' ? args : {limit:1});
   }
   if (operation === "select") {
-    const tab = await chrome.tabs.update(tabId, {active:true});
-    await chrome.windows.update(tab.windowId, {focused:true});
+    // Select the tab without stealing OS focus or restoring its window.
+    await chrome.tabs.update(tabId, {active:true});
     return {};
   }
   if (operation === "close") {

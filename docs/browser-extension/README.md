@@ -76,7 +76,7 @@ saygo device screenshot --session browser-test
 
 默认使用发现的共享桥；指定目录时使用 `--bridge-directory`，WSL 必须传 Windows 目录对应的 WSL 路径，例如 `/mnt/c/Users/YOUR_USER/AppData/Local/Saygo/browser-bridge`。仅在 WSL 内注册 Linux host 无法连接 Windows Chrome。连接拒绝覆盖其他平台或其他桥的会话。
 
-首次连接仅在恰好一个网站标签页时自动选择，否则显式选页。页面身份包含浏览器会话 UUID 和 tab ID；Chrome 重启后不能把旧任务绑定到复用的数字 ID。选页会将页面带到前面，截图本身不会。
+首次连接仅在恰好一个网站标签页时自动选择，否则显式选页。页面身份包含浏览器会话 UUID 和 tab ID；Chrome 重启后不能把旧任务绑定到复用的数字 ID。`select-page` 和显式指定页面的连接会切换目标窗口中的活动标签页；当前源码不再主动聚焦或前置整个浏览器窗口，截图也不会改变窗口焦点。此修复尚未发布到商店，已有扩展不会因 Python 包更新自动获得该行为。
 
 ## 后台截图与超时
 

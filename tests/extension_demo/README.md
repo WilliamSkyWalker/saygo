@@ -68,6 +68,14 @@ decodable PNG, clicks the test input and inserts text. The browser fixture check
 the final text and the same selected page; the existing headed CI gate runs this
 case along with the background capture/scroll cases.
 
+`test_cli_page_selection_preserves_foreground_window` requires headed Chromium.
+It uses the same isolated profile, real extension and native host, with a separate
+window kept in front. Real CLI requests select an inactive tab, select it again,
+and connect with an explicit page ID. Each must select the intended tab while
+leaving the other window focused. On Linux, the test also checks the actual X11
+active window and stacking order through `xprop`; run it under Xvfb with a window
+manager. This covers selection separately from background capture and input.
+
 `test_capture.mjs` uses mocked window states (including minimized) to ensure
 requests never activate tabs or change focus. These are control-policy checks,
 not proof of minimized-window support. It also covers per-page pending ownership, late results, no post-timeout capture

@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 import tempfile
 import threading
 import time
@@ -104,6 +105,11 @@ class ExtensionLive(unittest.TestCase):
 
     def test_background_tab_input_after_manual_tab_switch(self):
         self.run_live(self.check_background_input)
+
+    @unittest.skipUnless(os.environ.get("SAYGO_TEST_HEADED") == "1",
+                         "window focus preservation requires headed Chromium")
+    def test_cli_page_selection_preserves_foreground_window(self):
+        self.run_live(self.check_selection_preserves_foreground)
 
     def run_live(self, check, reconnect_mcp=False):
         from playwright.sync_api import sync_playwright
@@ -292,6 +298,69 @@ class ExtensionLive(unittest.TestCase):
                 self.assertFalse(page.is_closed())
             finally:
                 context.close()
+
+    def check_selection_preserves_foreground(self, context, page, ui, platform, url, root):
+        target_tab = int(platform.page_id.split(':')[-1])
+        target_window = ui.evaluate('id => chrome.tabs.get(id)', target_tab)['windowId']
+        other_tab = ui.evaluate('options => chrome.tabs.create(options)',
+                               {'windowId': target_window, 'url': url + '/selection', 'active': False})
+        other_id = platform.page_id.rsplit(':', 1)[0] + ':' + str(other_tab['id'])
+        cover = ui.evaluate('url => chrome.windows.create({url, focused:true, width:900, height:700})',
+                            url + '/foreground')
+        command = [sys.executable, '-m', 'saygo.cli', 'device']
+        env = {**os.environ, 'SAYGO_HOME_DIR': str(root / 'saygo-home')}
+
+        def window_state():
+            return ui.evaluate('''async ids => ({
+                target: await chrome.windows.get(ids.target),
+                cover: await chrome.windows.get(ids.cover)
+            })''', {'target': target_window, 'cover': cover['id']})
+
+        def desktop_order():
+            if sys.platform != 'linux':
+                return None
+            self.assertTrue(shutil.which('xprop'), 'headed Linux focus test requires xprop')
+            result = subprocess.run(['xprop', '-root', '_NET_ACTIVE_WINDOW', '_NET_CLIENT_LIST_STACKING'],
+                                    check=True, capture_output=True, text=True, timeout=5)
+            self.assertRegex(result.stdout, r'_NET_ACTIVE_WINDOW\(WINDOW\): window id # 0x[1-9a-fA-F][0-9a-fA-F]*',
+                             'run with a window manager on an isolated display')
+            self.assertIn('_NET_CLIENT_LIST_STACKING(WINDOW): window id #', result.stdout)
+            return result.stdout
+
+        try:
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                state = window_state()
+                if state['cover']['focused'] and not state['target']['focused']:
+                    break
+                page.wait_for_timeout(100)
+            page.wait_for_timeout(250)
+            selections = [
+                ('select inactive tab', ['select-page', other_id], other_id, other_tab['id']),
+                ('select same tab again', ['select-page', other_id], other_id, other_tab['id']),
+                ('connect with explicit page', ['connect', '--platform', 'browser', '--backend', 'extension',
+                                                '--page-id', platform.page_id], platform.page_id, target_tab),
+            ]
+            for label, arguments, selected_id, selected_tab in selections:
+                with self.subTest(selection=label):
+                    before = window_state()
+                    self.assertTrue(before['cover']['focused'])
+                    self.assertFalse(before['target']['focused'])
+                    order = desktop_order()
+                    result = subprocess.run(command + arguments + ['--session', 'daily-web'], env=env,
+                                            capture_output=True, text=True, timeout=45)
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                    payload = json.loads(result.stdout)
+                    self.assertEqual(payload.get('selected_page_id', payload.get('page_id')), selected_id)
+                    self.assertTrue(ui.evaluate('id => chrome.tabs.get(id)', selected_tab)['active'])
+                    after = window_state()
+                    self.assertTrue(after['cover']['focused'], 'page selection stole the foreground window')
+                    self.assertFalse(after['target']['focused'], 'target browser window was foregrounded')
+                    self.assertEqual(after['target']['state'], before['target']['state'])
+                    self.assertEqual(desktop_order(), order, 'page selection changed desktop focus or stacking')
+        finally:
+            ui.evaluate('id => chrome.windows.remove(id)', cover['id'])
+            ui.evaluate('id => chrome.tabs.remove(id)', other_tab['id'])
 
     def check_large_network_body(self, context, page, ui, platform, url, root):
         platform.network('clear')
