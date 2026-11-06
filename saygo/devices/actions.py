@@ -89,8 +89,8 @@ def prepare(platform, action, observation=None):
         return action
     if observation:
         import time
-        if time.time() - observation.get("at", time.time()) > 30:
-            raise ValueError("Observation expired; observe again (maximum age 30s)")
+        if time.time() - observation.get("at", time.time()) > observations.MAX_AGE_SECONDS:
+            raise ValueError(f"Observation expired; observe again (maximum age {observations.MAX_AGE_SECONDS}s)")
         current = platform.screenshot_raw()
         meta = observations.metadata(platform, current, observation.get("session"))
         if any(meta.get(k) != observation.get(k) for k in ("screen_size", "page_id", "url", "target", "window_id", "process_id", "window_bounds")):

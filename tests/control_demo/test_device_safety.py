@@ -126,6 +126,50 @@ class DeviceSafetyTests(unittest.TestCase):
         self.assertFalse(result['ok'])
         self.assertEqual(self.device.calls, [])
 
+    def test_observations_remain_usable_through_sixty_seconds(self):
+        captured_at = 1000
+        for age in (45, 60):
+            for command, options, expected in (
+                    ('act', {'action': {'type': 'tap', 'x': 1, 'y': 2}}, ('tap', 1, 2)),
+                    ('key', {'key': 'enter'}, ('key', 'enter'))):
+                with self.subTest(age=age, command=command):
+                    captured_at += 100
+                    with patch('time.time', return_value=captured_at):
+                        oid = self.observe()
+                    self.device.calls.clear()
+                    with patch('time.time', return_value=captured_at + age):
+                        result = service.execute(command, 'web', observation_id=oid, **options)
+                    self.assertTrue(result['ok'], result)
+                    self.assertEqual(self.device.calls, [expected])
+
+    def test_observations_older_than_sixty_seconds_never_dispatch(self):
+        for command, options in (
+                ('act', {'action': {'type': 'tap', 'x': 1, 'y': 2}}),
+                ('key', {'key': 'enter'})):
+            with self.subTest(command=command):
+                with patch('time.time', return_value=1000):
+                    oid = self.observe()
+                with patch('time.time', return_value=1060.001):
+                    result = service.execute(command, 'web', observation_id=oid, **options)
+                self.assertFalse(result['ok'])
+                self.assertEqual(result['outcome'], 'not_dispatched')
+                self.assertIn('maximum age 60s', result['error'])
+                self.assertEqual(self.device.calls, [])
+
+    def test_changed_screen_still_rejected_within_extended_validity(self):
+        with patch('time.time', return_value=1000):
+            oid = self.observe()
+        out = io.BytesIO()
+        Image.new('RGB', self.device.screen_size, 'black').save(out, format='PNG')
+        self.device.frame = out.getvalue()
+        with patch('time.time', return_value=1045):
+            result = service.execute('act', 'web', observation_id=oid,
+                                     action={'type': 'tap', 'x': 1, 'y': 2})
+        self.assertFalse(result['ok'])
+        self.assertEqual(result['outcome'], 'not_dispatched')
+        self.assertIn('Screen changed', result['error'])
+        self.assertEqual(self.device.calls, [])
+
     def test_ime_preparation_failure_is_not_dispatched_for_input_and_act(self):
         from saygo.platforms.android_ime import InputMethodError
         for command, options in [('input', {'text': 'example'}),

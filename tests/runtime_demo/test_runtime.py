@@ -228,6 +228,28 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(self.runtime.run(run["id"])["status"], "failed")
         self.assertNotIn(("browser", "execute"), self.trace)
 
+    def test_observation_remains_usable_through_sixty_seconds(self):
+        for age in (45, 60):
+            with self.subTest(age=age):
+                self.trace.clear()
+                run = self.runtime.create(self.workflow(self.action_steps()))
+                with patch("saygo.runtime.engine.time") as clock:
+                    clock.time.side_effect = [1000, 1000 + age, 1000 + age]
+                    state = self.runtime.run(run["id"])
+                self.assertEqual(state["status"], "succeeded")
+                self.assertEqual(self.trace.count(("phone", "execute")), 1)
+
+    def test_observation_older_than_sixty_seconds_is_rejected_before_dispatch(self):
+        run = self.runtime.create(self.workflow(self.action_steps()))
+        with patch("saygo.runtime.engine.time") as clock:
+            clock.time.side_effect = [1000, 1060.001]
+            state = self.runtime.run(run["id"])
+        self.assertEqual(state["status"], "failed")
+        self.assertIn("maximum age 60s", state["error"])
+        self.assertIsNone(state["pending"])
+        self.assertNotIn(("phone", "execute"), self.trace)
+        self.assertNotIn("action_dispatching", [e["kind"] for e in self.store.events(run["id"])])
+
     def test_consumed_observation_cannot_be_reused(self):
         steps = self.action_steps()
         steps.append(dict(steps[-1], id="again"))

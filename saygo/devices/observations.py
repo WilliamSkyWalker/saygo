@@ -10,6 +10,8 @@ from PIL import Image, ImageChops
 
 from saygo.platforms import device_session as ds
 
+MAX_AGE_SECONDS = 60
+
 
 def metadata(platform, png, session=None):
     from .actions import capabilities

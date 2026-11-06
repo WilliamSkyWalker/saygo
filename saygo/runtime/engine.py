@@ -6,6 +6,8 @@ import json
 import copy
 import uuid
 
+from saygo.devices.observations import MAX_AGE_SECONDS
+
 from .resources import PreconditionError, make_resource, resource_key
 from .schema import resolve, validate
 
@@ -211,8 +213,10 @@ class Runtime:
             state.pop("revalidate_step", None)
         latest = state["observations"].get(name)
         if (not isinstance(observation, dict) or not latest or observation != latest
-                or observation.get("resource") != name or time.time() - observation["at"] > 30):
-            raise PreconditionError("action needs the latest observation of its resource (maximum age 30s)")
+                or observation.get("resource") != name
+                or time.time() - observation["at"] > MAX_AGE_SECONDS):
+            raise PreconditionError(
+                f"action needs the latest observation of its resource (maximum age {MAX_AGE_SECONDS}s)")
         action = resolve(step["action"], context)
         resource = self._resource(state, name)
         prepared = resource.prepare(action, observation)
