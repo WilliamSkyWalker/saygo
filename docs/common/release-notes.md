@@ -24,7 +24,7 @@
   的迟到结果不再改动新采集计数。完整正文和缓存淘汰后的流恢复已经包含在
   0.4.17 扩展中，不作为本版新增能力。
 
-仓库同时收录[个人 Agent 与任务知识库规划草案](../../PERSONAL_AGENT_PLAN.md)。
+仓库同时收录[个人 Agent 与任务知识库规划草案](https://github.com/WilliamSkyWalker/saygo/blob/b30d6a1/PERSONAL_AGENT_PLAN.md)。
 它是后续设计讨论，不代表本版实现了知识库、视觉动作复用或云端同步。
 
 ## 升级与已有会话
