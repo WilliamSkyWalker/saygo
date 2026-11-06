@@ -37,7 +37,7 @@ python -m saygo.integrations.browser_setup --extension-id ehomcchjfomfkcmbeinlcm
 
 打开普通网页，在扩展弹窗点击 **Connect local bridge（连接本地桥）**，再重启 Agent 客户端。连接后所有现有及新增网站标签页都可发现，不需逐页分享。Chrome 可能显示正常的调试控制提示条。
 
-当前源码会在本浏览器配置中记住连接开关：成功连接后，下次启动浏览器自动连接一次；点击 **Release browser and disconnect（释放浏览器并断开）** 后，重启仍保持关闭。弹窗显示下次启动是否连接。首次安装或旧版本没有记录时默认关闭，需要手动连接一次；普通后台 worker 唤醒或扩展重载不会触发自动连接。此改动尚未发布到商店，已有安装版不会因 Python 包升级而获得该行为。
+当前源码会在本浏览器配置中记住连接开关：成功连接后，下次启动浏览器自动连接一次；点击 **Release browser and disconnect（释放浏览器并断开）** 后，重启仍保持关闭。弹窗显示下次启动是否连接。首次安装或旧版本没有记录时默认关闭，需要手动连接一次；普通后台 worker 唤醒或扩展重载不会触发自动连接。0.4.21 Python 包和扩展 ZIP 已公开核验，扩展于 2026-11-06 送审，状态为 `PENDING_REVIEW`（商店仍分发 0.4.17）；详见[发布验收](../common/history/release-0.4.21.md)。已有安装版不会因 Python 包升级而获得该行为，以浏览器实际加载版本为准。
 
 本地桥异常退出时保留上次开启意图，当次显示连接错误、不循环重试；下次浏览器启动仍尝试一次。偏好保存失败会明确报错，释放仍撤销当次控制，但不能保证下次启动状态已保存。开关仅存于本配置，不同步到其他浏览器。实现使用 Chrome 的 [启动事件](https://developer.chrome.com/docs/extensions/reference/api/runtime#event-onStartup) 和 [本地扩展存储](https://developer.chrome.com/docs/extensions/reference/api/storage#storage-areas)。
 
@@ -76,7 +76,7 @@ saygo device screenshot --session browser-test
 
 默认使用发现的共享桥；指定目录时使用 `--bridge-directory`，WSL 必须传 Windows 目录对应的 WSL 路径，例如 `/mnt/c/Users/YOUR_USER/AppData/Local/Saygo/browser-bridge`。仅在 WSL 内注册 Linux host 无法连接 Windows Chrome。连接拒绝覆盖其他平台或其他桥的会话。
 
-首次连接仅在恰好一个网站标签页时自动选择，否则显式选页。页面身份包含浏览器会话 UUID 和 tab ID；Chrome 重启后不能把旧任务绑定到复用的数字 ID。`select-page` 和显式指定页面的连接会切换目标窗口中的活动标签页；当前源码不再主动聚焦或前置整个浏览器窗口，截图也不会改变窗口焦点。此修复尚未发布到商店，已有扩展不会因 Python 包更新自动获得该行为。
+首次连接仅在恰好一个网站标签页时自动选择，否则显式选页。页面身份包含浏览器会话 UUID 和 tab ID；Chrome 重启后不能把旧任务绑定到复用的数字 ID。`select-page` 和显式指定页面的连接会切换目标窗口中的活动标签页；当前源码不再主动聚焦或前置整个浏览器窗口，截图也不会改变窗口焦点。此修复包含在 0.4.21 扩展中，审核/分发状态见上述发布记录；Python 包升级不能替代浏览器实际加载新版扩展。
 
 ## 后台截图与超时
 
