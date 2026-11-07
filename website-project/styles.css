@@ -86,12 +86,9 @@ h3 { font-weight: 550; font-size: 21px; margin: 0 0 15px; letter-spacing: -.5px;
 .platform-card { padding: 30px 32px 30px 0; min-width: 0; }
 .platform-card + .platform-card { padding-left: 32px; border-left: 1px solid var(--line); }
 .platform-status { color: var(--orange); font: 10px/1.6 ui-monospace, monospace; letter-spacing: 1px; margin: 0 0 20px; }
-.platform-card + .platform-card .platform-status { color: var(--muted); }
 .platform-card h3 { font-size: 18px; line-height: 1.6; }
 .platform-card > p:not(.platform-status) { color: var(--muted); font-size: 13px; line-height: 1.9; margin: 0; max-width: 560px; }
 .platform-card .text-link { margin-top: 20px; color: var(--orange); }
-.platform-card-mac h3 { color: var(--orange); }
-.platform-boundary { color: var(--muted); font-size: 12px; line-height: 1.9; max-width: 960px; margin: 0 0 20px; }
 .quickstart { background: #11141a; border-block: 1px solid var(--line); padding: 86px 0 60px; }
 .section-heading { display: flex; justify-content: space-between; align-items: flex-end; gap: 25px; margin-bottom: 36px; }
 .section-heading .eyebrow { margin-bottom: 16px; }
