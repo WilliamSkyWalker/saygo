@@ -98,8 +98,6 @@ h3 { font-weight: 550; font-size: 21px; margin: 0 0 15px; letter-spacing: -.5px;
 .client-switch { display: flex; gap: 6px; }
 .client-switch button { border: 1px solid transparent; background: transparent; color: var(--muted); border-radius: 4px; padding: 8px 13px; font-size: 12px; white-space: nowrap; }
 .client-switch button[aria-pressed=true] { color: var(--ink); background: #2b303a; border-color: #404651; }
-.browser-picker { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; font-size: 11px; color: var(--muted); }
-.browser-picker select { border: 1px solid #414650; border-radius: 4px; background: #1a1e25; font-size: 12px; color: var(--ink); padding: 7px 10px; }
 .code-area { padding: 24px 28px 14px; }
 pre { margin: 0; overflow: auto; color: #edd2ba; font: 13px/2.1 ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; white-space: pre; tab-size: 2; }
 code { font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; }

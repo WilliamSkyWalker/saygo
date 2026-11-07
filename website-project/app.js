@@ -2,7 +2,6 @@
 const config = window.siteConfig || {};
 const { t } = window.siteI18n;
 const clients = document.querySelectorAll("[data-client]");
-const browser = document.querySelector("#install-browser");
 const command = document.querySelector("#install-command");
 const copyButton = document.querySelector("#copy-command");
 const copyStatus = document.querySelector("#copy-status");
@@ -16,7 +15,7 @@ function resetCopy() {
 }
 function updateCommand() {
   commandRevision += 1;
-  const setup = `saygo setup --client ${selectedClient}${browser.value === "edge" ? " --browser edge" : ""}`;
+  const setup = `saygo setup --client ${selectedClient}`;
   command.textContent = config.installMode === "pypi"
     ? `pipx install "saygo-agent-control[mcp]"\n${setup}`
     : `git clone https://github.com/WilliamSkyWalker/saygo.git\ncd saygo\npipx install "./[mcp]"\n${setup}`;
@@ -41,7 +40,6 @@ clients.forEach(button => button.addEventListener("click", () => {
   selectedClient = button.dataset.client;
   updateCommand();
 }));
-browser.addEventListener("change", updateCommand);
 copyButton.addEventListener("click", async () => {
   const revision = commandRevision;
   try {
