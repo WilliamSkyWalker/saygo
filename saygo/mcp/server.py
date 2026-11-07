@@ -732,7 +732,8 @@ def device_connect(platform: str, session: str, options: dict | None = None) -> 
         with _silenced_stdout():
             return connect(Namespace(platform=platform, session=session, **defaults))
     except Exception as exc:
-        return {"ok": False, "error": str(exc), "error_type": type(exc).__name__}
+        from saygo.devices.android_setup import error_payload
+        return error_payload(exc)
 
 
 @mcp.tool()

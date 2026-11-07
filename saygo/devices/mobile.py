@@ -159,7 +159,17 @@ def ios_physical():
     return rows
 
 
-def discover(which="all"):
+def _android_setup_result(result, host):
+    """Attach repair instructions only when discovery or Python readiness fails."""
+    from .android_setup import diagnose, mobile_python_check
+    failed = any(row.get('source') in {'android', 'windows_android', 'android_avds'}
+                 for row in result.get('diagnostics', []))
+    if failed or mobile_python_check()['status'] != 'ready':
+        result['setup'] = diagnose(host=host)
+    return result
+
+
+def discover(which="all", *, include_setup=True):
     devices, diagnostics = [], []
     local_online = False
     wsl_android = (which in {"all", "android"} and platform.system() == 'Linux'
@@ -177,7 +187,7 @@ def discover(which="all"):
             result['host'] = 'windows'
             if which == 'all':
                 result['diagnostics'].append({'source':'ios', 'message':'Local iOS discovery requires macOS/Xcode'})
-            return result
+            return _android_setup_result(result, 'windows') if include_setup else result
         except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired) as exc:
             diagnostics.append({'source':'windows_android', 'message':str(exc)})
     sources = []
@@ -200,23 +210,43 @@ def discover(which="all"):
             avds = run([emulator,"-list-avds"]).splitlines()
         except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
             diagnostics.append({"source":"android_avds","message":str(exc)})
-    return {"devices":devices,"android_avds":avds,"diagnostics":diagnostics}
+    result = {"devices":devices,"android_avds":avds,"diagnostics":diagnostics}
+    if include_setup and which in {'all', 'android'}:
+        # Preserve the host discovery actually tried, rather than reselecting
+        # according to emulator/KVM policy while diagnosing a physical device.
+        host = 'windows' if wsl_android and not local_online else 'local'
+        return _android_setup_result(result, host)
+    return result
 
 
 def connect(which, device=None, session=None, server_url=None, team_id=None, adb_port=None):
     from saygo.platforms import device_session as ds
+    selected_host = 'local'
     if not server_url:
         if which == "ios":
             require_mac()
         result = discover(which)
+        selected_host = result.get('host') or result.get('setup', {}).get('host', 'local')
         choices = [d for d in result["devices"] if d["connectable"] and (not device or d["id"] == device)]
         if len(choices) != 1:
-            raise RuntimeError("Select exactly one online device with --device; boot a simulator or authorize/unlock the phone first. Discovery: " + json.dumps(result))
+            message = "Select exactly one online device with --device; boot a simulator or authorize/unlock the phone first. Discovery: " + json.dumps(result)
+            if which == 'android' and result.get('setup', {}).get('ok') is False:
+                from .android_setup import MobileSetupError
+                raise MobileSetupError(message, result['setup'])
+            raise RuntimeError(message)
         device = choices[0]["id"]
         if which == 'android' and result.get('host') == 'windows':
             from . import mobile_host
-            worker = mobile_host.prepare_windows(mobile_host.windows_info())
-            return mobile_host.connect_windows(worker, device, session or device)
+            try:
+                worker = mobile_host.prepare_windows(mobile_host.windows_info())
+                return mobile_host.connect_windows(worker, device, session or device)
+            except Exception as exc:
+                from .android_setup import MobileSetupError, diagnose
+                if isinstance(exc, MobileSetupError): raise
+                setup = diagnose(host='windows')
+                if not setup['ok']:
+                    raise MobileSetupError(str(exc), setup) from exc
+                raise
     elif not device:
         raise ValueError("--device is required with a remote Appium server")
     serial = session or device
@@ -236,7 +266,15 @@ def connect(which, device=None, session=None, server_url=None, team_id=None, adb
     if existing and (existing.get("os") != which or existing.get("device_id",existing.get("serial")) != device or
                      existing.get("server_url", "").rstrip("/") != expected_server.rstrip("/")):
         raise ValueError("Session belongs to a different device/server; use another --session")
-    plat = ds.start(serial, which, appium_config=cfg)
+    try:
+        plat = ds.start(serial, which, appium_config=cfg)
+    except Exception as exc:
+        from .android_setup import MobileSetupError, diagnose
+        if which != 'android' or isinstance(exc, MobileSetupError): raise
+        setup = diagnose(host=selected_host, server_url=server_url or os.environ.get('APPIUM_SERVER_URL'))
+        if not setup['ok']:
+            raise MobileSetupError(str(exc), setup) from exc
+        raise
     return {"connected":True,"platform":which,"device":device,"session":serial,
             "screen_size":list(plat.screen_size)}
 
@@ -341,7 +379,7 @@ def sdk_tool(name):
     return str(binary)
 
 
-def install_android(name, api=35, accept_licenses=False):
+def install_android(name, api=35, accept_licenses=False, *, tools_only=False):
     safe_name(name)
     if not 30 <= api <= 99:
         raise ValueError("Installer supports Android API 30 or newer (up to 99)")
@@ -371,10 +409,17 @@ def install_android(name, api=35, accept_licenses=False):
     else:
         # Preserve the vendor's interactive license prompts.
         subprocess.run(command(licenses),env=environment(),check=True)
-    abi="arm64-v8a" if arm else "x86_64"
-    image=f"system-images;android-{api};google_apis;{abi}"
-    print("Installing emulator and system image (may take several minutes)",file=sys.stderr,flush=True)
-    run([sdk_tool("sdkmanager"),f"--sdk_root={root}","platform-tools","emulator",f"platforms;android-{api}","build-tools;35.0.0",image],timeout=3600,input="y\n"*200 if accept_licenses else "n\n",progress=True)
+    packages=["platform-tools",f"platforms;android-{api}","build-tools;35.0.0"]
+    if not tools_only:
+        abi="arm64-v8a" if arm else "x86_64"
+        image=f"system-images;android-{api};google_apis;{abi}"
+        packages.insert(1,"emulator")
+        packages.append(image)
+    print("Installing Android SDK tools" if tools_only else
+          "Installing emulator and system image (may take several minutes)",file=sys.stderr,flush=True)
+    run([sdk_tool("sdkmanager"),f"--sdk_root={root}",*packages],timeout=3600,input="y\n"*200 if accept_licenses else "n\n",progress=True)
+    if tools_only:
+        return {"platform":"android","sdk_root":str(root),"tools_only":True,"packages":packages}
     existing=run([root/"emulator"/executable("emulator"),"-list-avds"]).splitlines()
     if name in existing:
         avd_home=Path(os.environ.get("ANDROID_AVD_HOME", str(Path(os.environ.get("ANDROID_USER_HOME",Path.home()/".android"))/"avd")))
@@ -496,6 +541,8 @@ def register_install_boot(commands):
     p.add_argument("--name",default="Saygo")
     p.add_argument("--host",choices=["auto","local","windows"],default="auto")
     p.add_argument("--dry-run",action="store_true",help="Inspect the host and installation plan without installing")
+    p.add_argument("--tools-only",action="store_true",
+                   help="Prepare Android SDK and Appium for existing devices without installing an emulator")
     p.add_argument("--session",help="Session alias when using --connect")
     p.add_argument("--api",type=int,default=35)
     p.add_argument("--accept-licenses",action="store_true")
@@ -512,13 +559,15 @@ def register_install_boot(commands):
     p.add_argument("--timeout",type=int,default=240)
 
 
-def provision_runtime(which, name, api=35, *, boot=False, headless=False):
+def provision_runtime(which, name, api=35, *, boot=False, headless=False, tools_only=False):
     """Install on the executing host after preflight and license confirmation.
 
     Shared by the native CLI and the stdlib Windows worker. Connecting remains
     the caller's responsibility because Windows connections use a local relay.
     """
-    result=install_android(name,api,True) if which=="android" else install_ios(name)
+    if tools_only and (which != "android" or boot):
+        raise ValueError("--tools-only supports Android only and cannot be combined with --boot or --connect")
+    result=install_android(name,api,True,tools_only=tools_only) if which=="android" else install_ios(name)
     with contextlib.redirect_stdout(sys.stderr):
         node=toolchain.ensure_node()
         appium=toolchain.install_appium(node)
@@ -530,8 +579,11 @@ def provision_runtime(which, name, api=35, *, boot=False, headless=False):
 
 def provision(args):
     """Native-host install and optional connection."""
+    tools_only=getattr(args,"tools_only",False)
+    if tools_only and args.connect:
+        raise ValueError("--tools-only cannot be combined with --boot or --connect")
     result=provision_runtime(args.platform,args.name,args.api,
-                             boot=args.boot or args.connect,headless=args.headless)
+                             boot=args.boot or args.connect,headless=args.headless,tools_only=tools_only)
     if args.connect:
         result["connection"]=connect(args.platform,result["boot"]["device"],args.session)
     return result

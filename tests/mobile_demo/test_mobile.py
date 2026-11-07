@@ -114,6 +114,59 @@ class MobileTests(unittest.TestCase):
             self.assertNotIn('--force',calls[-1])
             self.assertIn('no\n',run.call_args.kwargs['input'])
 
+    def test_android_tools_only_installs_sdk_without_emulator_and_reuses_tools(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / 'sdk'
+
+            def unpack_tools(archive, destination):
+                tools = destination / 'cmdline-tools/bin'
+                tools.mkdir(parents=True)
+                (tools / 'sdkmanager').touch()
+                (tools / 'sdkmanager.bat').touch()
+
+            with patch.object(mobile, 'sdk_root', return_value=root), \
+                 patch.object(mobile, 'ensure_java') as java, \
+                 patch.object(mobile.platform, 'system', return_value='Darwin'), \
+                 patch.object(mobile.platform, 'machine', return_value='arm64'), \
+                 patch.object(mobile, 'download') as download, \
+                 patch.object(mobile, 'unpack', side_effect=unpack_tools), \
+                 patch.object(mobile, 'run', return_value='') as run:
+                first = mobile.install_android('Example', 35, True, tools_only=True)
+                second = mobile.install_android('Example', 35, True, tools_only=True)
+            self.assertEqual(first, second)
+            self.assertTrue(first['tools_only'])
+            self.assertNotIn('image', first)
+            self.assertNotIn('name', first)
+            download.assert_called_once()
+            self.assertIn('mac_arm64', download.call_args.args[0])
+            self.assertEqual(java.call_count, 2)
+            calls = [list(map(str, call.args[0])) for call in run.call_args_list]
+            self.assertEqual(len(calls), 4)
+            self.assertEqual(calls[0][-1], '--licenses')
+            self.assertEqual(calls[1][2:],
+                             ['platform-tools', 'platforms;android-35', 'build-tools;35.0.0'])
+            self.assertEqual(calls[:2], calls[2:])
+            self.assertFalse(any('emulator' in arg or 'system-images;' in arg or
+                                 'avdmanager' in arg for call in calls for arg in call))
+
+    def test_tools_only_native_provision_prepares_appium_without_booting(self):
+        from argparse import Namespace
+        result = {'platform': 'android', 'tools_only': True}
+        with patch.object(mobile, 'install_android', return_value=result) as install, \
+             patch.object(mobile.toolchain, 'ensure_node', return_value='node') as node, \
+             patch.object(mobile.toolchain, 'install_appium', return_value='appium') as appium, \
+             patch.object(mobile.toolchain, 'install_drivers') as drivers, \
+             patch.object(mobile, 'boot_device') as boot, patch.object(mobile, 'connect') as connect:
+            actual = mobile.provision(Namespace(platform='android', name='Example', api=35,
+                tools_only=True, boot=False, connect=False, headless=False, session=None))
+        self.assertEqual(actual, result)
+        install.assert_called_once_with('Example', 35, True, tools_only=True)
+        node.assert_called_once_with()
+        appium.assert_called_once_with('node')
+        drivers.assert_called_once_with('node', 'appium', ios=False)
+        boot.assert_not_called()
+        connect.assert_not_called()
+
     def test_invalid_names_rejected_before_install(self):
         with patch.object(mobile,'ensure_java') as java:
             for name in ['../outside','Saygo;bad','x\ny']:

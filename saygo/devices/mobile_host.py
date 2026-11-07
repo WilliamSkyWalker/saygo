@@ -78,13 +78,16 @@ $computer = Get-CimInstance Win32_ComputerSystem
 
 
 def plan(args):
+    tools_only = getattr(args, "tools_only", False)
+    if tools_only and args.platform != "android":
+        raise ValueError("--tools-only supports Android only")
     host = select_host(args.host, args.platform)
     blockers = []
     if host == "windows":
         details = windows_info()
         if details["architecture"].lower() != "amd64":
             blockers.append("Windows-hosted Android provisioning currently requires x64 Windows")
-        accelerated = details["hypervisor"] and details["whpx"]
+        accelerated = None if tools_only else details["hypervisor"] and details["whpx"]
     else:
         root = mobile.sdk_root() if args.platform == "android" else mobile.home()
         ancestor = root
@@ -92,28 +95,31 @@ def plan(args):
             ancestor = ancestor.parent
         details = {"home": str(mobile.home().parent), "sdk_root": str(root),
                    "free_bytes": shutil.disk_usage(ancestor).free}
-        accelerated = platform.system() != "Linux" or has_kvm()
-        if platform.system() == "Windows":
+        accelerated = None if tools_only else platform.system() != "Linux" or has_kvm()
+        if not tools_only and platform.system() == "Windows":
             native = windows_info()
             accelerated = native["hypervisor"] and native["whpx"]
         emulator = mobile.sdk_root() / "emulator" / mobile.executable("emulator")
-        if args.platform == "android" and emulator.is_file():
+        if not tools_only and args.platform == "android" and emulator.is_file():
             try:
                 mobile.run([emulator, "-accel-check"])
                 accelerated = True
             except RuntimeError as exc:
                 accelerated = False
                 details["acceleration_error"] = str(exc)
-    if details["free_bytes"] < MIN_FREE:
+    # The 12 GiB estimate includes an emulator image; do not impose it on SDK-only preparation.
+    if not tools_only and details["free_bytes"] < MIN_FREE:
         blockers.append("At least 12 GiB free disk space is required for provisioning")
-    if args.platform == "android" and not accelerated:
+    if not tools_only and args.platform == "android" and not accelerated:
         blockers.append("Hardware acceleration unavailable. " + (
             "Enable Windows Hypervisor Platform in Windows Features, reboot, then retry."
             if host == "windows" or platform.system() == "Windows" else
             "Enable KVM and grant access to /dev/kvm; on WSL use --host windows."))
-    return {"host": host, "platform": args.platform, **details,
+    components = (["Java", "Android SDK", "platform-tools", "platforms", "build-tools", "Node", "Appium", "UiAutomator2"]
+                  if tools_only else ["Java", "Android SDK", "Android Emulator", "system image", "Node", "Appium", "UiAutomator2"])
+    return {"host": host, "platform": args.platform, "tools_only": tools_only, **details,
             "hardware_acceleration": accelerated, "blockers": blockers,
-            "components": ["Java", "Android SDK", "Android Emulator", "system image", "Node", "Appium", "UiAutomator2"]
+            "components": components
             if args.platform == "android" else ["iOS Simulator runtime", "Node", "Appium", "XCUITest"],
             "download_note": "Several GB on first install; existing components are reused",
             "license_url": SDK_TERMS if args.platform == "android" else None}
@@ -191,6 +197,9 @@ def connect_windows(host, device, session):
 
 
 def execute(args):
+    tools_only = getattr(args, "tools_only", False)
+    if tools_only and (args.platform != "android" or args.boot or args.connect):
+        raise ValueError("--tools-only supports Android only and cannot be combined with --boot or --connect")
     if args.session and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", args.session):
         raise ValueError("Session alias must contain letters, digits, dot, dash or underscore")
     if args.device_command == "boot":
@@ -222,7 +231,7 @@ def execute(args):
     if details["host"] == "windows":
         worker = prepare_windows(details, install=True)
         result = call_windows(worker, "install", name=args.name, api=args.api, accept_licenses=True,
-                              boot=args.boot or args.connect, headless=args.headless)
+                              boot=args.boot or args.connect, headless=args.headless, tools_only=tools_only)
         if args.connect:
             result["connection"] = connect_windows(worker, result["boot"]["device"], args.session)
     else:

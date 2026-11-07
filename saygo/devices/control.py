@@ -423,5 +423,6 @@ def dispatch(args):
         else: result=disconnect(args.session)
         print(json.dumps(result,ensure_ascii=False))
     except (OSError,ValueError,RuntimeError,subprocess.SubprocessError) as exc:
-        print(json.dumps({"ok":False,"error":str(exc)},ensure_ascii=False))
+        from .android_setup import error_payload
+        print(json.dumps(error_payload(exc),ensure_ascii=False))
         raise SystemExit(2) from exc

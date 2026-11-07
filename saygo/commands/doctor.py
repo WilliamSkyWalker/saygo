@@ -7,6 +7,9 @@ from pathlib import Path
 def register(sub):
     p = sub.add_parser("doctor", help="Diagnose a connected session without sending input")
     p.add_argument("--session")
+    p.add_argument("--platform", choices=["android"], help="Check Android prerequisites before connecting")
+    p.add_argument("--host", choices=["auto", "local", "windows"], default="auto")
+    p.add_argument("--server-url", help="Check only client dependencies for an external Appium server")
     p.add_argument("--probe-action", type=json.loads, help="Explicit harmless input action to test; requires --session")
     p.set_defaults(handler=doctor)
     p = sub.add_parser("resources", help="Project resource aliases in .saygo/resources.json")
@@ -46,7 +49,15 @@ def diagnose(session=None, probe_action=None):
 
 
 def doctor(args):
-    result = diagnose(args.session, args.probe_action)
+    if getattr(args, 'platform', None):
+        if args.session or args.probe_action is not None:
+            raise ValueError('--platform checks prerequisites; do not combine it with --session or --probe-action')
+        from saygo.devices.android_setup import diagnose as android_diagnose
+        result = android_diagnose(host=args.host, server_url=args.server_url)
+    else:
+        if getattr(args, 'host', 'auto') != 'auto' or getattr(args, 'server_url', None):
+            raise ValueError('--host and --server-url require --platform android')
+        result = diagnose(args.session, args.probe_action)
     print(json.dumps(result, ensure_ascii=False))
     if result.get("ok") is False:
         raise SystemExit(2)

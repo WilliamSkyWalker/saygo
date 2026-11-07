@@ -223,7 +223,8 @@ def attach(serial: str | None, quiet: bool = False, *, state=None, strict=False)
         drv.get_window_size()
         return _platform_from_driver(drv, state.get("os", "android"), state, serial)
     except ImportError as e:
-        raise RuntimeError('Mobile Python dependencies are missing; install the mobile extra') from e
+        from saygo.devices.android_setup import python_dependency_error
+        raise python_dependency_error(e) from e
     except Exception as e:
         if strict:
             from selenium.common.exceptions import InvalidSessionIdException

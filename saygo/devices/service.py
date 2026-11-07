@@ -244,6 +244,8 @@ def _execute(args):
         error = {"ok": False, "error": str(exc), "error_type": type(exc).__name__,
                  "outcome": "uncertain" if dispatched else "not_dispatched",
                  "requires_observation": dispatched}
+        if isinstance(getattr(exc, 'setup', None), dict):
+            error['setup'] = exc.setup
         from .diagnostics import collect
         error["diagnostics"] = collect(plat, exc)
         if cmd == "type-send":

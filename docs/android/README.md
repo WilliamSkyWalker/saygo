@@ -8,10 +8,38 @@
 
 真机需开启 USB 调试、确认信任并解锁；Saygo 不绕过设备权限。连接现有手机不会默认清空数据或启动应用。Python 依赖选择 `mobile`；Appium 服务器还需完整 Android SDK，只有 platform-tools 的引导安装不等于 SDK 齐全。
 
+## 首次使用与依赖诊断
+
+本节的自动 `setup` 诊断、`doctor --platform android` 和 `--tools-only` 为当前源码新增能力，尚未发布；正式安装版需在含这些改动的版本发布后升级才能获得。
+
+发现或连接 Android 遇到依赖缺失时，CLI/MCP 会返回 `setup`，列出客户端、实际检查的主机、缺失项及后续命令，不自动安装。也可在连接前检查：
+
+```sh
+saygo doctor --platform android --host auto
+```
+
+| 运行环境 | 主机选择与执行位置 |
+| --- | --- |
+| macOS（Intel / Apple Silicon） | 在终端使用 `--host local`，检查本机 Android 工具；不需要 iOS/Xcode 工具链 |
+| 原生 Windows | 在 PowerShell 使用 `--host local`，不需要 WSL |
+| WSL | `--host auto` 在无可用 KVM 时选择 Windows；`--host local` 检查 WSL，`--host windows` 明确检查 Windows。按返回的主机修复，命令仍在 WSL 执行 |
+
+Python 修复命令绑定当前运行 Saygo 的解释器，只安装该版本声明的移动依赖，不重装 Saygo、另建 Python 环境或注册客户端。WSL 的 Python 客户端依赖留在 WSL，Windows 工具链由宿主安装流程准备；不要用 WSL 中的 `saygo mcp init` 修复 Windows 工具。若命令标记需覆盖 PEP 668 保护，只有明确决定修改该全局 Python 环境后才执行。
+
+已有真机只需工具链。先按诊断选中的主机预览，再明确安装；以下以本机为例，WSL 选中 Windows 时两条命令均使用 `--host windows`：
+
+```sh
+saygo device install --platform android --host local --tools-only --dry-run
+saygo device install --platform android --host local --tools-only
+```
+
+该模式准备 Java、SDK 命令行工具、platform-tools、platforms/build-tools 和 Node/Appium/UiAutomator2，复用已有组件，不下载模拟器或系统镜像、不创建 AVD，不要求硬件加速，也不套用模拟器的 12 GiB 空间门槛。实际安装仍需足够空间；SDK 许可须先审阅，交互确认后才下载，无人值守必须明确传入 `--accept-licenses`。它不允许与 `--boot`、`--connect` 或 iOS 组合。`--dry-run` 不修改环境；检查通过也不代表设备在线，准备后仍须发现设备、授权、连接并核验截图。
+
+`saygo mcp init --skip-ios` 保留为 Node/Appium/UiAutomator2/adb 引导，不等于完整 Java/SDK 准备。
+
 ## 发现与连接真机
 
 ```sh
-saygo mcp init --skip-ios
 saygo device list --platform android
 saygo device connect --platform android --device DEVICE_ID --session phone
 saygo device capabilities --session phone
@@ -79,7 +107,7 @@ saygo device boot --platform android --host windows Saygo --connect --session ph
 
 WSL 没有可用 `/dev/kvm` 时，`--host auto` 选择 Windows；`--host local/windows` 显式覆盖。这是本机 WSL 互操作，不是任意远程安装。Windows 路径要求 x64 Windows、WSL 互操作和 PowerShell。
 
-worker 在 `%LOCALAPPDATA%/Saygo/mobile` 安装私有嵌入 Python 和工具，优先复用 Windows SDK，否则放在该私有目录。不修改全局 PATH，只复制标准库 worker 源码，不复制项目配置或密钥。下载前检查加速；启用 Windows 功能、BIOS 或重启需要用户处理。
+worker 在 `%LOCALAPPDATA%/Saygo/mobile` 安装私有嵌入 Python 和工具，优先复用 Windows SDK，否则放在该私有目录。不修改全局 PATH，只复制标准库 worker 源码，不复制项目配置或密钥。模拟器安装下载前检查加速；启用 Windows 功能、BIOS 或重启需要用户处理。
 
 Windows Appium 仅监听 Windows 回环地址。带令牌的 WSL 回环转发通过 Windows Python stdio 通信，不改防火墙或镜像网络设置；失败请求不重放。私有 adb 使用独立持久端口并传给 Appium，避免争用默认 5037，不停止其他 adb 服务。
 
@@ -90,10 +118,11 @@ Appium 和转发服务保留供后续命令复用；disconnect 结束 Appium 会
 ## 远程 Appium 与任务
 
 ```sh
-saygo device connect --platform android --device DEVICE_ID --server-url http://windows-host.example:4723 --session phone
+saygo doctor --platform android --server-url http://android-host.example:4723
+saygo device connect --platform android --device DEVICE_ID --server-url http://android-host.example:4723 --session phone
 ```
 
-先在远端启动 Appium，提供可达地址和明确设备 ID，不用本地发现猜测远端设备。远端负责 USB、SDK 和模拟器；此命令不安装远程工具或自动开放网络服务。工作流资源使用：
+上述 `doctor` 是当前源码的新入口，仅检查客户端 Python 依赖，不要求本地 Java/SDK/adb/Node/Appium，也不验证服务器可达或设备在线。先在远端启动 Appium，提供可达地址和明确设备 ID，不用本地发现猜测远端设备。远端负责 USB、SDK 和所需设备环境；这些命令不安装远程工具或自动开放网络服务。工作流资源使用：
 
 ```json
 {"phone": {"kind": "android", "session": "phone"}}

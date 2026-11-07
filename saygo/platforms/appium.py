@@ -89,9 +89,13 @@ class AppiumPlatform(Platform):
     # --- Lifecycle ---
 
     def setup(self, config: dict) -> None:
-        from appium import webdriver
-        from appium.options.android import UiAutomator2Options
-        from appium.options.ios import XCUITestOptions
+        try:
+            from appium import webdriver
+            from appium.options.android import UiAutomator2Options
+            from appium.options.ios import XCUITestOptions
+        except ImportError as exc:
+            from saygo.devices.android_setup import python_dependency_error
+            raise python_dependency_error(exc) from exc
 
         from .appium_server import AppiumServerManager
 

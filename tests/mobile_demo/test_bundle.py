@@ -11,6 +11,29 @@ from saygo.devices import mobile_host
 
 
 class WorkerBundleTests(unittest.TestCase):
+    def test_worker_discovery_does_not_import_client_dependency_guidance(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'python').mkdir()
+            (root / 'python/python.exe').touch()
+            details = {'home': tmp, 'sdk_root': str(root / 'sdk')}
+            with patch.object(mobile_host, 'wsl_path', side_effect=lambda value, windows=False: str(value)):
+                host = mobile_host.prepare_windows(details)
+            package_root = str(Path(host['script']).parents[2])
+            source = '''import json, sys
+sys.path.insert(0, sys.argv[1])
+from saygo.devices import mobile, mobile_host_worker as worker
+worker.configure_adb = lambda home: None
+mobile.android_devices = lambda: []
+print(json.dumps(worker.execute(json.loads(sys.argv[2]))))
+'''
+            result = subprocess.run([sys.executable, '-I', '-S', '-c', source, package_root,
+                                     json.dumps(dict(details, operation='discover'))],
+                                    text=True, capture_output=True, cwd=tmp, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(json.loads(result.stdout)['devices'], [])
+            self.assertNotIn('setup', json.loads(result.stdout))
+
     def test_isolated_worker_imports_reorganized_stdlib_package(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

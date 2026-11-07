@@ -73,14 +73,8 @@ def find_appium_binary(explicit: str | None = None) -> str | None:
 
 
 def _default_android_home() -> str | None:
-    for cand in (
-        os.environ.get("ANDROID_HOME"),
-        os.environ.get("ANDROID_SDK_ROOT"),
-        os.path.expanduser("~/Library/Android/sdk"),   # macOS
-        os.path.expanduser("~/Android/Sdk"),           # Linux
-    ):
-        if cand and os.path.isdir(cand):
-            return cand
+    # Discovery, preparation, diagnostics and server startup must select the
+    # same SDK when a private installation and Android Studio coexist.
     from saygo.devices.mobile import sdk_root
     root = sdk_root()
     return str(root) if root.is_dir() else None
@@ -116,6 +110,9 @@ class AppiumServerManager:
 
         appium_bin = find_appium_binary(self._cfg.get("binary"))
         if not appium_bin:
+            if self._cfg.get('os', 'android') == 'android':
+                from saygo.devices.android_setup import MobileSetupError, diagnose
+                raise MobileSetupError('Appium is missing on the local Android host', diagnose(host='local'))
             raise RuntimeError(
                 "找不到 appium 可执行文件。装法：\n"
                 "  python3 -m saygo.cli mcp init --skip-ios  # Android；iOS 去掉 --skip-ios\n"

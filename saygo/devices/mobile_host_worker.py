@@ -138,7 +138,8 @@ def execute(payload):
                               payload["path"], payload.get("body"))
     configure_adb(payload["home"])
     if operation == 'discover':
-        return mobile.discover('android')
+        # Python client repair belongs to WSL, not this stdlib-only host.
+        return mobile.discover('android', include_setup=False)
     if operation == "server":
         return ensure_server()
     if operation == "boot":
@@ -147,7 +148,8 @@ def execute(payload):
         raise ValueError("Installation requires explicit SDK license acceptance")
     return mobile.provision_runtime("android", payload["name"], payload["api"],
                                     boot=payload.get("boot", False),
-                                    headless=payload.get("headless", False))
+                                    headless=payload.get("headless", False),
+                                    tools_only=payload.get("tools_only", False))
 
 
 if __name__ == "__main__":

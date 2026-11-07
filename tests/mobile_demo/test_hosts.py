@@ -5,6 +5,7 @@ import io
 import json
 import os
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 from unittest.mock import Mock, patch
@@ -15,7 +16,7 @@ from saygo.devices import mobile, mobile_host, mobile_host_worker, mobile_relay
 def install_args(**changes):
     values = dict(device_command="install", platform="android", host="auto", name="Saygo",
                   api=35, accept_licenses=False, boot=False, connect=False, session=None,
-                  headless=False, dry_run=False)
+                  headless=False, dry_run=False, tools_only=False)
     return Namespace(**(values | changes))
 
 
@@ -113,6 +114,89 @@ class HostTests(unittest.TestCase):
             self.assertEqual(mobile_host.execute(install_args(dry_run=True)), details)
             prepare.assert_not_called()
             consent.assert_not_called()
+
+    def test_tools_only_cli_option_and_invalid_combinations(self):
+        from saygo.cli import build_parser
+        parsed = build_parser().parse_args(['device', 'install', '--platform', 'android', '--tools-only'])
+        self.assertTrue(parsed.tools_only)
+        for changes in ({'platform': 'ios'}, {'boot': True}, {'connect': True}):
+            with self.subTest(changes=changes), \
+                 patch.object(mobile_host, 'plan') as plan, \
+                 patch.object(mobile_host, 'prepare_windows') as prepare, \
+                 patch.object(mobile_host, 'confirm_licenses') as consent:
+                with self.assertRaisesRegex(ValueError, '--tools-only'):
+                    mobile_host.execute(install_args(tools_only=True, dry_run=True, **changes))
+                plan.assert_not_called()
+                prepare.assert_not_called()
+                consent.assert_not_called()
+
+    def test_tools_only_windows_dry_run_skips_emulator_requirements_and_writes(self):
+        details = dict(home=r'C:\Example\Saygo', sdk_root=r'C:\Example\sdk',
+                       free_bytes=2 * 1024**3, architecture='AMD64', hypervisor=False, whpx=False)
+        with patch.object(mobile_host, 'select_host', return_value='windows'), \
+             patch.object(mobile_host, 'windows_info', return_value=details), \
+             patch.object(mobile_host, 'prepare_windows') as prepare, \
+             patch.object(mobile_host, 'confirm_licenses') as consent, \
+             patch.object(mobile, 'provision') as provision:
+            result = mobile_host.execute(install_args(tools_only=True, dry_run=True))
+        self.assertEqual(result['host'], 'windows')
+        self.assertTrue(result['tools_only'])
+        self.assertIsNone(result['hardware_acceleration'])
+        self.assertEqual(result['blockers'], [])
+        self.assertEqual(result['components'], ['Python (private Windows host)', 'Java', 'Android SDK',
+            'platform-tools', 'platforms', 'build-tools', 'Node', 'Appium', 'UiAutomator2'])
+        prepare.assert_not_called()
+        consent.assert_not_called()
+        provision.assert_not_called()
+
+    def test_tools_only_local_plan_never_checks_emulator_acceleration(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'emulator').mkdir()
+            (root / 'emulator' / mobile.executable('emulator')).touch()
+            for system in ('Linux', 'Darwin', 'Windows'):
+                with self.subTest(system=system), \
+                     patch.object(mobile_host, 'select_host', return_value='local'), \
+                     patch.object(mobile_host.platform, 'system', return_value=system), \
+                     patch.object(mobile_host, 'has_kvm') as kvm, \
+                     patch.object(mobile_host, 'windows_info') as windows, \
+                     patch.object(mobile, 'sdk_root', return_value=root), \
+                     patch.object(mobile, 'home', return_value=root), \
+                     patch.object(mobile, 'run') as run:
+                    result = mobile_host.plan(install_args(tools_only=True))
+                self.assertIsNone(result['hardware_acceleration'])
+                self.assertEqual(result['blockers'], [])
+                kvm.assert_not_called()
+                windows.assert_not_called()
+                run.assert_not_called()
+
+    def test_tools_only_windows_install_preserves_host_and_mode(self):
+        details = {'host': 'windows', 'blockers': [], 'tools_only': True}
+        worker = {'python': 'windows-python'}
+        with patch.object(mobile_host, 'plan', return_value=details), \
+             patch.object(mobile_host, 'confirm_licenses') as consent, \
+             patch.object(mobile_host, 'prepare_windows', return_value=worker) as prepare, \
+             patch.object(mobile_host, 'call_windows', return_value={'tools_only': True}) as call, \
+             patch.object(mobile_host, 'connect_windows') as connect, \
+             contextlib.redirect_stderr(io.StringIO()):
+            result = mobile_host.execute(install_args(host='windows', tools_only=True, accept_licenses=True))
+        self.assertEqual(result, {'tools_only': True, 'host': 'windows'})
+        consent.assert_called_once_with(True)
+        prepare.assert_called_once_with(details, install=True)
+        call.assert_called_once_with(worker, 'install', name='Saygo', api=35,
+            accept_licenses=True, boot=False, headless=False, tools_only=True)
+        connect.assert_not_called()
+
+    def test_tools_only_windows_worker_preserves_mode(self):
+        payload = dict(home='/tmp/example', sdk_root='/tmp/example/sdk', operation='install',
+                       accept_licenses=True, name='Example', api=35, tools_only=True)
+        with patch.dict(os.environ), patch.object(sys, 'path', list(sys.path)), \
+             patch.object(mobile_host_worker, 'configure_adb'), \
+             patch.object(mobile, 'provision_runtime', return_value={'tools_only': True}) as provision:
+            result = mobile_host_worker.execute(payload)
+        self.assertTrue(result['tools_only'])
+        provision.assert_called_once_with('android', 'Example', 35,
+            boot=False, headless=False, tools_only=True)
 
     def test_preflight_rejects_low_disk_and_missing_acceleration(self):
         details = dict(home=r"C:\Example\Saygo", sdk_root=r"C:\Example\sdk", free_bytes=1,
