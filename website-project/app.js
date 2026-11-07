@@ -2,7 +2,7 @@
 const config = window.siteConfig || {};
 const { t } = window.siteI18n;
 const clients = document.querySelectorAll("[data-client]");
-const os = document.querySelector("#install-os");
+const browser = document.querySelector("#install-browser");
 const command = document.querySelector("#install-command");
 const copyButton = document.querySelector("#copy-command");
 const copyStatus = document.querySelector("#copy-status");
@@ -16,31 +16,32 @@ function resetCopy() {
 }
 function updateCommand() {
   commandRevision += 1;
+  const setup = `saygo setup --client ${selectedClient}${browser.value === "edge" ? " --browser edge" : ""}`;
   command.textContent = config.installMode === "pypi"
-    ? `pipx install "saygo-agent-control[mcp]"\nsaygo setup --client ${selectedClient}`
-    : `git clone https://github.com/WilliamSkyWalker/saygo.git\ncd saygo\npipx install "./[mcp]"\nsaygo setup --client ${selectedClient}`;
+    ? `pipx install "saygo-agent-control[mcp]"\n${setup}`
+    : `git clone https://github.com/WilliamSkyWalker/saygo.git\ncd saygo\npipx install "./[mcp]"\n${setup}`;
   clients.forEach(button => button.setAttribute("aria-pressed", String(button.dataset.client === selectedClient)));
   resetCopy();
 }
 function updateInstallText() {
   const fromPyPI = config.installMode === "pypi";
-  document.querySelector("#install-requirements").textContent = fromPyPI ? "Python 3.10+ · pipx" : "Python 3.10+ · Git";
+  document.querySelector("#install-requirements").textContent = fromPyPI ? "Python 3.10+ · pipx" : "Python 3.10+ · pipx · Git";
   document.querySelector("#setup-requirements").textContent = t(fromPyPI ? "setupRequirementsPypi" : "setupRequirementsSource");
   document.querySelector("#install-mode-note").textContent = t(fromPyPI ? "installNotePypi" : "installNoteSource");
-  os.closest("label").hidden = fromPyPI;
 }
 updateInstallText();
 document.querySelector("#site-language").addEventListener("change", event => {
   window.siteI18n.apply(event.target.value, true);
   updateInstallText();
   updateCommand();
+  updateVideoFallback();
 });
 updateCommand();
 clients.forEach(button => button.addEventListener("click", () => {
   selectedClient = button.dataset.client;
   updateCommand();
 }));
-os.addEventListener("change", updateCommand);
+browser.addEventListener("change", updateCommand);
 copyButton.addEventListener("click", async () => {
   const revision = commandRevision;
   try {
@@ -66,6 +67,12 @@ document.querySelector("#year").textContent = new Date().getFullYear();
 const video = document.querySelector("#video");
 if (config.videoSrc) video.src = config.videoSrc;
 if (config.videoPoster) video.poster = config.videoPoster;
+function updateVideoFallback() {
+  const link = document.querySelector("#video-error a");
+  if (link) link.href = video.src;
+}
+updateVideoFallback();
 video.addEventListener("error", () => {
+  updateVideoFallback();
   document.querySelector("#video-error").hidden = false;
 });

@@ -12,6 +12,7 @@
   <meta property="og:title" content="Saygo — 让你的 AI，操作真实设备。">
   <meta property="og:description" content="为 Codex、Claude Code 等 AI 工具连接浏览器、桌面和手机。">
   <meta property="og:url" content="https://saygo.work/">
+  <meta property="og:image" content="https://saygo.work/public/videos/poster.jpg">
   <link rel="stylesheet" href="styles.css">
   <script src="site-config.js" defer></script>
   <script src="i18n.js" defer></script>
@@ -22,7 +23,7 @@
 <header class="navigation wrap">
   <a class="brand" href="#" aria-label="Saygo 首页" data-i18n-aria="homeLabel"><span class="brand-icon" aria-hidden="true">s</span>Saygo<span class="beta">BETA</span></a>
   <nav aria-label="主导航" data-i18n-aria="navLabel">
-    <a href="#film" data-i18n="navDemo">实机演示</a><a href="#quickstart" data-i18n="navStart">接入指南</a><a class="desktop-link" href="https://github.com/WilliamSkyWalker/saygo/blob/main/docs/README.md" data-i18n="navDocs">文档 ↗</a><a class="github-link" href="https://github.com/WilliamSkyWalker/saygo">GitHub <span aria-hidden="true">↗</span></a>
+    <a href="#film" data-i18n="navDemo">实机演示</a><a href="#platforms" data-i18n="navPlatforms">平台支持</a><a href="#quickstart" data-i18n="navStart">接入指南</a><a class="desktop-link" href="https://github.com/WilliamSkyWalker/saygo/blob/main/docs/README.md" data-i18n="navDocs">文档 ↗</a><a class="github-link" href="https://github.com/WilliamSkyWalker/saygo">GitHub <span aria-hidden="true">↗</span></a>
     <label class="language-picker"><span class="sr-only" data-i18n="languageLabel">选择语言</span><select id="site-language"><option value="zh" lang="zh-CN">简体中文</option><option value="en" lang="en">English</option></select></label>
   </nav>
 </header>
@@ -31,16 +32,16 @@
     <div class="hero-copy">
       <p class="eyebrow" data-i18n-html="eyebrow"><span class="status-dot"></span> 为你的 AI 工具扩展行动能力</p>
       <h1 id="hero-title" data-i18n-html="heroTitle">让你的 AI，<br>操作<span>真实设备。</span></h1>
-      <p class="hero-description" data-i18n="heroDescription">为 Codex、Claude Code 等 AI 工具连接浏览器、桌面和手机。从理解任务，到执行操作，再到确认结果。</p>
+      <p class="hero-description" data-i18n="heroDescription">让 Codex、Claude Code 等 AI 工具看见屏幕、点击界面、输入文字，在浏览器、桌面和手机上完成任务，并核对实际结果。</p>
       <div class="hero-actions"><a class="primary-button" href="#quickstart" data-i18n-html="primaryAction">开始使用 <span aria-hidden="true">↗</span></a><a class="secondary-button" href="#film" data-i18n-html="demoAction"><span aria-hidden="true">▶</span> 看它如何工作</a></div>
-      <div class="hero-links"><a class="text-link" href="#quickstart" data-i18n-html="startLink">查看接入步骤 <span aria-hidden="true">→</span></a><span data-i18n="noKey">沿用现有 AI 工具，无需另配模型 API Key</span></div>
+      <div class="hero-links"><a class="text-link" href="#quickstart" data-i18n-html="startLink">查看接入步骤 <span aria-hidden="true">→</span></a><span data-i18n="noKey">外部 Agent 接入沿用现有模型，无需另配 Saygo API Key</span></div>
     </div>
     <div class="demo-stage">
       <div class="stage-label" aria-hidden="true"><span>SAY IT. DO IT.</span><span>01 / IN ACTION</span></div>
     <div class="demo" id="film">
-      <div class="demo-heading"><span data-i18n-html="demoHeading"><i class="status-dot"></i> 实机演示</span><span data-i18n="demoPlatform">桌面 / QQ 音乐</span></div>
-      <div class="demo-request"><span class="request-label" data-i18n="taskLabel">任务</span><p data-i18n="demoTask">打开 QQ 音乐，并搜索作品。</p><span aria-hidden="true">↗</span></div>
-      <div class="player-shell"><video id="video" controls playsinline preload="none" poster="public/videos/poster.jpg" src="public/videos/brand.mp4" aria-label="Saygo 操作 QQ 音乐完整实机演示" data-i18n-aria="videoLabel"></video><div id="video-error" hidden role="status" data-i18n-html="videoError">视频暂时无法播放。<a href="public/videos/brand.mp4">打开视频文件 ↗</a></div></div>
+      <div class="demo-heading"><span data-i18n-html="demoHeading"><i class="status-dot"></i> 实机演示</span><span data-i18n="demoPlatform">桌面 / 音乐应用</span></div>
+      <div class="demo-request"><span class="request-label" data-i18n="taskLabel">任务</span><p data-i18n="demoTask">打开桌面音乐应用，并搜索作品。</p><span aria-hidden="true">↗</span></div>
+      <div class="player-shell"><video id="video" controls playsinline preload="none" poster="public/videos/poster.jpg" src="public/videos/brand.mp4" aria-label="Saygo 操作桌面音乐应用的完整实机演示" data-i18n-aria="videoLabel"></video><div id="video-error" hidden role="status" data-i18n-html="videoError">视频暂时无法播放。<a href="public/videos/brand.mp4">打开视频文件 ↗</a></div></div>
       <div class="demo-caption"><span data-i18n-html="watch"><span class="play-mark" aria-hidden="true">▶</span> 观看完整操作过程</span><span data-i18n="recording">02:28 · 真实录屏</span></div>
       <div class="demo-workflow" aria-label="工作流程" data-i18n-aria="workflowLabel"><span data-i18n-html="observe"><b>01</b> 观察界面</span><i aria-hidden="true">→</i><span data-i18n-html="act"><b>02</b> 执行操作</span><i aria-hidden="true">→</i><span data-i18n-html="verify"><b>03</b> 确认结果</span></div>
     </div>
@@ -48,40 +49,51 @@
     </div>
   </section>
   <div class="compatibility wrap"><span data-i18n="compatibility">你熟悉的 AI 工具，多一种能力。</span><div><b>Codex</b><b>Claude Code</b><b>Qoder CLI</b><a href="https://github.com/WilliamSkyWalker/saygo/blob/main/docs/common/installation.md" data-i18n="integrations">查看接入说明 ↗</a></div></div>
-  <section class="platforms wrap" id="platforms" aria-labelledby="platform-title">
-    <p class="eyebrow" data-i18n="platformLabel">平台支持与计划</p>
-    <h2 id="platform-title" data-i18n="platformTitle">从桌面到手机，持续扩展。</h2>
-    <p class="platform-intro" data-i18n="platformIntro">面向 Windows、Windows WSL 和 macOS，覆盖 Android、iOS 真机与模拟器的设备操控与调试。</p>
-    <div class="platform-grid">
-      <article class="platform-card"><p class="platform-status" data-i18n="availableLabel">当前已可用</p><h3 data-i18n="availableTitle">Windows · Windows WSL · Android · macOS</h3><p data-i18n="availableDetail">已支持 Windows、Windows WSL 和 Android；macOS 新增实验性后台控制，可操作受支持的原生控件，不主动抢占鼠标或前台。已在 Intel Mac、macOS 12.7.6 的独立测试窗口验证。</p></article>
-      <article class="platform-card"><p class="platform-status" data-i18n="plannedLabel">后续计划</p><h3 data-i18n="plannedTitle">Apple Silicon · 新版 macOS · iOS</h3><p data-i18n="plannedDetail">后续将验证 Apple Silicon 与新版 macOS 的兼容性，并继续适配和实测 iOS 真机与模拟器。macOS 后台模式暂不支持最小化或其他桌面的窗口，具体应用需单独验证。</p></article>
+  <section class="use-modes wrap" aria-labelledby="modes-title">
+    <p class="eyebrow" data-i18n="modesLabel">选择使用方式</p>
+    <h2 id="modes-title" data-i18n="modesTitle">接入你的 Agent，也能独立使用。</h2>
+    <div class="mode-grid">
+      <article class="mode-card"><h3 data-i18n="agentModeTitle">已有 AI 工具</h3><p data-i18n="agentModeDetail">通过 CLI 或 MCP 接入设备。沿用现有 Agent 的模型，支持逐步操作、人工接管与任务恢复。</p><a class="text-link" href="#quickstart" data-i18n="agentModeLink">接入指南 →</a></article>
+      <article class="mode-card"><h3 data-i18n="desktopModeTitle">独立桌面应用</h3><p data-i18n="desktopModeDetail">在桌面界面连接设备、描述任务和查看进度。需配置兼容的视觉模型 API。</p><a class="text-link" href="https://github.com/WilliamSkyWalker/saygo/blob/main/docs/common/desktop-app.md" data-i18n="desktopModeLink">桌面应用指南 ↗</a></article>
+      <article class="mode-card"><h3 data-i18n="qaModeTitle">自动化测试</h3><p data-i18n="qaModeDetail">运行测试用例，按步骤检查结果并生成报告。配置 QA 模型，用 Probe 核验后端等非视觉结果。</p><a class="text-link" href="https://github.com/WilliamSkyWalker/saygo/blob/main/docs/common/qa.md" data-i18n="qaModeLink">测试与报告指南 ↗</a></article>
     </div>
-    <a class="text-link" href="https://github.com/WilliamSkyWalker/saygo#platforms-and-validation-limits" data-i18n="platformDocs">查看平台支持与验证范围 ↗</a>
+  </section>
+  <section class="platforms wrap" id="platforms" aria-labelledby="platform-title">
+    <p class="eyebrow" data-i18n="platformLabel">平台支持</p>
+    <h2 id="platform-title" data-i18n="platformTitle">桌面、浏览器、手机，接入同一套操作。</h2>
+    <p class="platform-intro" data-i18n="platformIntro">连接 macOS、Windows、Android 和 Chrome / Edge。Windows 可原生使用，也可从 WSL 接入；每个平台都有对应的权限与连接指引。</p>
+    <div class="platform-grid">
+      <article class="platform-card platform-card-mac"><p class="platform-status" data-i18n="macLabel">APPLE SILICON 已实测</p><h3 data-i18n="macTitle">Mac，Apple 芯片也能用。</h3><p data-i18n="macDetail">已在 Apple Silicon、macOS 27.0 上实测计算器点击、文本编辑器中英文与 emoji 输入及保存；Chrome 的截图、点击、输入和滚动也已通过。</p><a class="text-link" href="https://github.com/WilliamSkyWalker/saygo/blob/main/docs/macos/README.md" data-i18n="macGuide">Mac 连接与实测范围 ↗</a></article>
+      <article class="platform-card"><p class="platform-status" data-i18n="availableLabel">当前已可用</p><h3 data-i18n="availableTitle">Windows · Android · 浏览器</h3><p data-i18n="availableDetail">操作 Windows 桌面、Android 真机与模拟器，以及 Chrome / Edge 中已登录的网页。通过截图观察界面，再点击、输入、滚动并核对结果。</p></article>
+      <article class="platform-card"><p class="platform-status" data-i18n="plannedLabel">持续验证</p><h3 data-i18n="plannedTitle">iOS · 更多后台场景</h3><p data-i18n="plannedDetail">iOS 真机与模拟器已有接入能力，仍需进一步实机验收。macOS 后台控制保持实验性，支持范围取决于原生控件与窗口状态。</p></article>
+    </div>
+    <p class="platform-boundary" data-i18n="platformBoundary">桌面前台操作需保持目标窗口可见，部分应用可能需要手动置于前台。Apple Silicon 本次实测覆盖前台窗口与 Chrome；后台模式已有 Intel Mac 独立原生窗口测试记录。</p>
+    <a class="text-link" href="https://github.com/WilliamSkyWalker/saygo/blob/main/docs/README.md" data-i18n="platformDocs">查看平台支持与验证范围 ↗</a>
   </section>
   <section class="quickstart" id="quickstart" aria-labelledby="quickstart-title">
     <div class="wrap">
-      <div class="section-heading"><div><p class="eyebrow" data-i18n="quickstartLabel">快速接入</p><h2 id="quickstart-title" data-i18n="quickstartTitle">从第一条命令开始。</h2></div><p data-i18n-html="quickstartIntro">继续使用熟悉的工具。<br>把屏幕上的操作，交给 AI。</p></div>
+      <div class="section-heading"><div><p class="eyebrow" data-i18n="quickstartLabel">浏览器快速接入</p><h2 id="quickstart-title" data-i18n="quickstartTitle">安装正式版，连接你的工具。</h2></div><p data-i18n-html="quickstartIntro">从 PyPI 安装 Saygo。<br>选择 AI 客户端和浏览器，复制对应命令。</p></div>
       <div class="install-box" id="install" aria-label="插件安装命令" data-i18n-aria="installLabel">
         <div class="install-controls">
           <div class="client-switch" role="group" aria-label="选择 AI 工具" data-i18n-aria="clientLabel"><button type="button" data-client="codex" aria-pressed="true">Codex</button><button type="button" data-client="claude" aria-pressed="false">Claude Code</button></div>
-          <label class="os-picker"><span class="sr-only" data-i18n="chooseOS">选择操作系统</span><select id="install-os"><option value="unix">macOS / Linux / WSL</option><option value="windows">Windows</option></select></label>
+          <label class="browser-picker"><span data-i18n="chooseBrowser">选择浏览器</span><select id="install-browser"><option value="chrome">Chrome</option><option value="edge">Edge</option></select></label>
         </div>
         <div class="code-area"><pre tabindex="0" aria-label="安装命令" data-i18n-aria="commandLabel"><code id="install-command">pipx install "saygo-agent-control[mcp]"
 saygo setup --client codex</code></pre></div>
         <div class="install-bottom"><span id="install-requirements">Python 3.10+ · pipx</span><button class="copy-button" id="copy-command" type="button" data-i18n-html="copy">复制命令 <span aria-hidden="true">⧉</span></button></div>
         <p class="sr-only" id="copy-status" role="status" aria-live="polite"></p>
       </div>
-      <noscript><p class="small-note">以上为 Codex 安装命令，其他客户端请查看<a href="https://github.com/WilliamSkyWalker/saygo#programming-agent-setup">安装文档</a>。</p></noscript>
+      <noscript><p class="small-note">以上为 Codex 安装命令，其他客户端请查看<a href="https://github.com/WilliamSkyWalker/saygo/blob/main/docs/common/installation.md">安装文档</a>。</p></noscript>
       <div class="steps">
-        <article class="step"><span class="step-number">01</span><h3 data-i18n="stepInstall">安装插件</h3><p><span id="setup-requirements" data-i18n="setupRequirementsPypi">准备好 Python 3.10+、pipx 和对应的 AI 客户端，在终端运行安装命令。</span></p><div class="step-detail"><span class="detail-label" data-i18n="installerDoes">安装器会完成</span><p data-i18n="installerDetail">创建独立运行环境，接入 MCP 与操作 Skill。</p></div><a class="text-link" href="#install" data-i18n-html="chooseCopy">选择工具并复制命令 <span aria-hidden="true">↑</span></a></article>
-        <article class="step"><span class="step-number">02</span><h3 data-i18n="stepConnect">连接你的设备</h3><p data-i18n="connectDetail">从 Chrome 网上应用店安装 Saygo Browser，支持 Chrome 和 Edge。</p><div class="step-detail"><span class="detail-label" data-i18n="extensionLabel">浏览器扩展</span><p data-i18n-html="extensionDetail"><a href="https://chromewebstore.google.com/detail/ehomcchjfomfkcmbeinlcmpbaamdhfbo">安装 Saygo Browser ↗</a>，打开弹窗点击 <code>Connect local bridge</code>，然后重启 AI 客户端。</p></div><a class="text-link" href="https://github.com/WilliamSkyWalker/saygo/blob/main/docs/README.md" data-i18n-html="deviceDocs">桌面和手机接入说明 <span aria-hidden="true">↗</span></a></article>
+        <article class="step"><span class="step-number">01</span><h3 data-i18n="stepInstall">安装 Saygo</h3><p><span id="setup-requirements" data-i18n="setupRequirementsPypi">准备好 Python 3.10+、pipx 和对应的 AI 客户端，在终端运行安装命令。</span></p><div class="step-detail"><span class="detail-label" data-i18n="installerDoes">接入配置会完成</span><p data-i18n="installerDetail">注册 MCP、设备操作 Skill 与所选浏览器的本地桥，复用已安装的 Saygo 环境。</p></div><a class="text-link" href="#install" data-i18n-html="chooseCopy">选择工具并复制命令 <span aria-hidden="true">↑</span></a></article>
+        <article class="step"><span class="step-number">02</span><h3 data-i18n="stepConnect">连接你的设备</h3><p data-i18n="connectDetail">在上方选择的 Chrome 或 Edge 中，从 Chrome 网上应用店安装 Saygo Browser。</p><div class="step-detail"><span class="detail-label" data-i18n="extensionLabel">浏览器扩展</span><p data-i18n-html="extensionDetail"><a href="https://chromewebstore.google.com/detail/ehomcchjfomfkcmbeinlcmpbaamdhfbo">安装 Saygo Browser ↗</a>，打开弹窗点击 <code>Connect local bridge</code>，然后重启 AI 客户端。</p></div><a class="text-link" href="https://github.com/WilliamSkyWalker/saygo/blob/main/docs/README.md" data-i18n-html="deviceDocs">桌面和手机接入说明 <span aria-hidden="true">↗</span></a></article>
         <article class="step"><span class="step-number">03</span><h3 data-i18n="stepPrompt">发出第一条指令</h3><p data-i18n="promptDetail">在新的 AI 会话中描述任务，让它先查看当前界面，再开始操作。</p><div class="step-detail prompt"><span class="detail-label" data-i18n="tryPrompt">试着对 AI 说</span><p data-i18n="prompt">“使用 Saygo 查看已连接的设备，连接我的测试浏览器页面，告诉我屏幕上有什么。”</p></div><span class="step-note" data-i18n="observeFirst">从观察开始，确认连接成功。</span></article>
       </div>
-      <div class="setup-note"><span class="note-label" data-i18n="betaNote">开发测试版</span><p><span id="install-mode-note" data-i18n="installNotePypi">通过 pipx 安装，再运行 saygo setup 接入 AI 工具。</span><span data-i18n="platformNote">手机需要额外工具链，桌面控制需要相应系统权限。</span><a href="https://github.com/WilliamSkyWalker/saygo#platforms-and-validation-limits" data-i18n="platformDocs">查看平台支持与验证范围 ↗</a></p></div>
+      <div class="setup-note"><span class="note-label" data-i18n="betaNote">接入前提</span><p><span id="install-mode-note" data-i18n="installNotePypi">通过 pipx 安装，再运行 saygo setup 接入 AI 工具。</span><span data-i18n="platformNote">浏览器按以上步骤接入；桌面另需对应驱动依赖与系统权限，手机需额外工具链。</span><a href="https://github.com/WilliamSkyWalker/saygo/blob/main/docs/README.md" data-i18n="platformDocs">查看平台支持与验证范围 ↗</a></p></div>
     </div>
   </section>
 </main>
 <div class="closing-wordmark wrap" aria-hidden="true">saygo<span>↗</span></div>
-<footer class="wrap"><a class="brand" href="#"><span class="brand-icon" aria-hidden="true">s</span>Saygo</a><span data-i18n="tagline">你说，它做。</span><div><a href="https://github.com/WilliamSkyWalker/saygo/blob/main/docs/README.md" data-i18n="footerDocs">文档</a><a href="privacy.html">Privacy / 隐私政策</a><a href="https://github.com/WilliamSkyWalker/saygo">GitHub ↗</a><span>© <span id="year">2026</span> Saygo</span></div></footer>
+<footer class="wrap"><a class="brand" href="#"><span class="brand-icon" aria-hidden="true">s</span>Saygo</a><span data-i18n="tagline">你说，它做。</span><div><a href="https://github.com/WilliamSkyWalker/saygo/blob/main/docs/README.md" data-i18n="footerDocs">文档</a><a href="privacy.html" data-i18n="footerPrivacy">隐私政策</a><a href="https://github.com/WilliamSkyWalker/saygo">GitHub ↗</a><span>© <span id="year">2026</span> Saygo</span></div></footer>
 </body>
 </html>

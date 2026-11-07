@@ -72,16 +72,26 @@ video { display: block; width: 100%; height: 100%; object-fit: contain; }
 .compatibility a { font-size: 11px; }
 h2 { margin: 0; font-size: clamp(30px, 3.2vw, 46px); line-height: 1.35; font-weight: 550; letter-spacing: -1.5px; }
 h3 { font-weight: 550; font-size: 21px; margin: 0 0 15px; letter-spacing: -.5px; }
-.platforms { padding-block: 96px; }
+.use-modes { padding-top: 80px; }
+.use-modes > .eyebrow { margin-bottom: 18px; }
+.mode-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; margin-top: 32px; }
+.mode-card { border: 1px solid var(--line); border-radius: 8px; padding: 26px; display: flex; flex-direction: column; align-items: flex-start; }
+.mode-card h3 { font-size: 19px; line-height: 1.5; }
+.mode-card p { font-size: 13px; line-height: 1.9; color: var(--muted); margin: 0 0 22px; }
+.mode-card .text-link { margin-top: auto; }
+.platforms { padding-block: 80px; }
 .platforms > .eyebrow { margin-bottom: 18px; }
 .platform-intro { max-width: 780px; color: var(--muted); font-size: 14px; line-height: 1.9; margin: 22px 0 34px; }
-.platform-grid { display: grid; grid-template-columns: 1.2fr 1fr; border-block: 1px solid var(--line); margin-bottom: 26px; }
+.platform-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-block: 1px solid var(--line); margin-bottom: 26px; }
 .platform-card { padding: 30px 32px 30px 0; min-width: 0; }
 .platform-card + .platform-card { padding-left: 32px; border-left: 1px solid var(--line); }
 .platform-status { color: var(--orange); font: 10px/1.6 ui-monospace, monospace; letter-spacing: 1px; margin: 0 0 20px; }
 .platform-card + .platform-card .platform-status { color: var(--muted); }
 .platform-card h3 { font-size: 18px; line-height: 1.6; }
-.platform-card > p:last-child { color: var(--muted); font-size: 13px; line-height: 1.9; margin: 0; max-width: 560px; }
+.platform-card > p:not(.platform-status) { color: var(--muted); font-size: 13px; line-height: 1.9; margin: 0; max-width: 560px; }
+.platform-card .text-link { margin-top: 20px; color: var(--orange); }
+.platform-card-mac h3 { color: var(--orange); }
+.platform-boundary { color: var(--muted); font-size: 12px; line-height: 1.9; max-width: 960px; margin: 0 0 20px; }
 .quickstart { background: #11141a; border-block: 1px solid var(--line); padding: 86px 0 60px; }
 .section-heading { display: flex; justify-content: space-between; align-items: flex-end; gap: 25px; margin-bottom: 36px; }
 .section-heading .eyebrow { margin-bottom: 16px; }
@@ -91,11 +101,12 @@ h3 { font-weight: 550; font-size: 21px; margin: 0 0 15px; letter-spacing: -.5px;
 .client-switch { display: flex; gap: 6px; }
 .client-switch button { border: 1px solid transparent; background: transparent; color: var(--muted); border-radius: 4px; padding: 8px 13px; font-size: 12px; white-space: nowrap; }
 .client-switch button[aria-pressed=true] { color: var(--ink); background: #2b303a; border-color: #404651; }
-.os-picker select { border: 0; background: #1a1e25; max-width: 175px; font-size: 11px; color: var(--muted); padding: 6px 0; }
+.browser-picker { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; font-size: 11px; color: var(--muted); }
+.browser-picker select { border: 1px solid #414650; border-radius: 4px; background: #1a1e25; font-size: 12px; color: var(--ink); padding: 7px 10px; }
 .code-area { padding: 24px 28px 14px; }
 pre { margin: 0; overflow: auto; color: #edd2ba; font: 13px/2.1 ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; white-space: pre; tab-size: 2; }
 code { font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; }
-.install-bottom { padding: 12px 26px 22px; display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+.install-bottom { padding: 12px 26px 22px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; align-items: center; }
 .install-bottom > span { font: 11px ui-monospace, monospace; color: var(--muted); }
 .copy-button { border: 1px solid #414650; background: #1b2028; border-radius: 4px; padding: 10px 14px; display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--ink); }
 .copy-button:hover { border-color: var(--orange); color: var(--orange); }
@@ -148,6 +159,8 @@ html[lang="en"] h1 { font-size: clamp(42px, 4.5vw, 66px); line-height: 1.12; }
   .demo-stage { width: 100%; max-width: 650px; margin-inline: auto; }
   .desktop-link { display: none; }
   .platforms { padding-block: 64px; }
+  .use-modes { padding-top: 64px; }
+  .mode-grid { grid-template-columns: 1fr; gap: 16px; }
   .platform-grid { grid-template-columns: 1fr; }
   .platform-card, .platform-card + .platform-card { padding: 26px 0; border-left: 0; }
   .platform-card + .platform-card { border-top: 1px solid var(--line); }
@@ -163,7 +176,7 @@ html[lang="en"] h1 { font-size: clamp(42px, 4.5vw, 66px); line-height: 1.12; }
 @media (max-width: 560px) {
   .wrap { width: calc(100% - 40px); }
   .navigation { flex-wrap: wrap; gap: 20px; padding-block: 22px; }
-  .navigation nav { width: 100%; justify-content: space-between; gap: 12px; font-size: 11px; }
+  .navigation nav { width: 100%; flex-wrap: wrap; gap: 16px; font-size: 11px; }
   .github-link { padding: 8px 10px; gap: 8px; }
   .language-picker select { font-size: 11px; max-width: 100px; }
   .hero { padding-block: 46px 50px; gap: 40px; }
