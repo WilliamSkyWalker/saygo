@@ -197,12 +197,12 @@ idle, other Chrome versions, and other operating systems remain unverified.
 
 ## Automated regression gates
 
-The shared `.github/workflows/checks.yml` is required by both release workflows.
-Pull requests affecting any tests or workflow files trigger the package workflow.
-It runs all offline control, runtime, desktop, CLI, mobile, browser and bridge
-suites in separate processes and state directories, plus all extension JavaScript
-suites. Hardware-only tests remain explicit opt-ins; they are not counted as
-executed simply because discovery succeeded.
+Cloud regression jobs were removed for 1.0.0 at the user's explicit request.
+Release workflows now build and upload only; they do not execute these tests.
+The scripts below remain local entry points. macOS CDP-loaded focus acceptance
+and Linux native persistent-install/restart acceptance exercise different platform
+paths; neither result stands in for the other. Record browser and dependency
+versions with each actual run. Hardware-only skips are not passes.
 
 ```sh
 python -m pip install '.[mcp,browser,desktop,qa,selenium,mobile]'
@@ -210,17 +210,17 @@ python scripts/check_core_tests.py
 node --test tests/extension_demo/test_*.mjs
 ```
 
-A separate Linux job runs the real extension/native host in headed Chromium under
+The local Linux entry point runs the real extension/native host in headed Chromium under
 Xvfb and Openbox. It checks foreground, background, covered and inactive
 tab captures with exact fixture colors; window/tab state must stay unchanged.
 It also checks a 35-second idle interval with an inactive tab in a normal window,
 12 consecutive captures, actual scroll
 movement in independent panes, fractional fine adjustments, reverse direction,
-and top/bottom boundaries. Browser integration failures block publication.
+and top/bottom boundaries. Record browser integration failures explicitly with the local acceptance evidence.
 
 ```sh
 python -m playwright install --with-deps chromium
-# Install xvfb, openbox and x11-utils with the system package manager.
+# Install xvfb, openbox, x11-utils and xdotool with the system package manager.
 xvfb-run -a -s '-screen 0 1600x1000x24' python scripts/check_browser_tests.py
 ```
 

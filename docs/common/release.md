@@ -2,7 +2,7 @@
 
 [公共文档](README.md) · [发布需求](requirements.md#release) · [开发规范](../../AGENTS.md)
 
-源码修改、构建、安装、发布和商店审核分别核实。commit/push 授权不等于升版授权；只有明确授权才修改版本、创建发布标签或发布。仅修验收脚本/CI 时保留原版本和标签，用修正后的检查验证原产物。
+源码修改、构建、安装、发布和商店审核分别核实。commit/push 授权不等于升版授权；只有明确授权才修改版本、创建发布标签或发布。仅修验收脚本时保留原版本和标签，在本地用修正后的检查验证原产物。
 
 ## 构建对象
 
@@ -36,11 +36,13 @@ check_python_package.py 在仓库外创建不继承系统包的临时环境，�
 
 ## 发布流程
 
-获授权后，推送与 distribution/release.json 匹配的版本标签触发回归、GitHub 构建发布和商店提交。Python package 工作流独立执行构建及三平台安装检查后上传 PyPI。普通分支推送不上传 Python 包；手动 Build release 仅生成构建产物。
+自 1.0.0 起按用户要求移除所有云端测试和校验任务，包括共享回归、MCP/桥接、真实浏览器、三平台安装冒烟、桌面测试及网站语法检查。测试脚本保留供本地明确执行；本地 macOS 与 Linux 原生安装流程不能互相代替，也不声称环境完全一致。
+
+获授权后，在本地完成适用验收并核对版本、标签与产物，再推送匹配 distribution/release.json 的标签。云端仅执行 GitHub/Python/扩展构建、文件上传、PyPI 发布和商店提交，不执行回归或安装验收。Python package 不再由 pull request 触发。普通分支推送不上传 Python 包；手动 Build release 仅生成构建产物。构建成功不能写作测试通过。
 
 浏览器商店使用独立状态与凭据，见[商店材料](../browser-extension/store.md)。上传、提交审核、Google 批准和浏览器实际收到更新是不同状态，不能以流水线成功代替审核通过。
 
-桌面构建通过后，运行“Publish verified desktop artifacts”，选择既有发布标签和对应桌面构建运行 ID。要求三个平台均成功且构建提交等于标签提交，核验各归档 SHA256 后附加文件，不重建、不覆盖已有附件。
+桌面构建后，在本地核对三个平台产物、构建提交、目标标签和 SHA256，再运行“Publish desktop artifacts”，选择既有发布标签和对应构建运行 ID。云端下载并上传该运行的文件，不再执行来源/摘要校验或测试，不重建、不覆盖已有附件。
 
 ## PyPI 发布者
 
@@ -55,7 +57,7 @@ check_python_package.py 在仓库外创建不继承系统包的临时环境，�
 
 Trusted Publishing 使用 GitHub OIDC，不提交长期 API token。GitHub 环境若启用 required reviewers，生产上传会等待审批；是否使用审批由实际发布授权和仓库设置决定。
 
-手动仅验收选择 `publish: none`。手动发布支持 testpypi/pypi，生产必须选匹配标签。若只修验证脚本，在修正分支运行 `release_tag: v0.4.16` 和对应 publish：回归及包构建使用标签，安装冒烟使用工作流分支的检查脚本。不能覆盖已有 PyPI 文件或移动标签。
+手动仅构建选择 `publish: none`，不代表验收。手动发布支持 testpypi/pypi，操作者在本地确认生产选择匹配标签；`release_tag` 可指定已有标签的源码。不能覆盖已有 PyPI 文件或移动标签。
 
 参考 [PyPA Trusted Publishing](https://packaging.python.org/en/latest/guides/publishing-package-distribution-releases-using-github-actions-ci-cd-workflows/)。
 
@@ -63,7 +65,7 @@ Trusted Publishing 使用 GitHub OIDC，不提交长期 API token。GitHub 环�
 
 分别记录：
 
-1. 标签提交、CI 实际运行范围、通过与跳过数量。
+1. 标签提交、本地检查的命令/平台/通过与跳过数量；云端构建与上传状态单独记录。
 2. GitHub 公开 release、预期源码/安装器/扩展/桌面文件及摘要。
 3. PyPI JSON 与 simple 索引的目标版本、未撤回文件、实际下载哈希及安装。
 4. 商店上传/提交/审核/实际安装状态，禁止重复上传不确定结果。

@@ -16,13 +16,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Validate website assets
-        run: |
-          test -s website-project/index.html
-          test -s website-project/public/videos/brand.mp4
-          node --check website-project/i18n.js
-          node --check website-project/app.js
-          node --check website-project/site-config.js
       - name: Ensure Cloudflare Pages project exists
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

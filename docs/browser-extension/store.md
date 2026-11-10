@@ -25,7 +25,7 @@ Google Cloud 启用 Chrome Web Store API，创建 Web OAuth 客户端，将 http
 
 外部 OAuth 应用处于 Testing 时刷新令牌可能短期失效；历史配置使用生产模式。令牌撤销/过期须重新授权。参见[官方 API 配置](https://developer.chrome.com/docs/webstore/using-api)与[令牌过期规则](https://developers.google.com/identity/protocols/oauth2#expiration)。
 
-查询时运行 GitHub Actions 的 Chrome Web Store status，摘要显示已发布/已提交版本、上传状态与政策标记。它只查询，不提交、取消或发布。
+独立的云端状态查询工作流已按用户要求移除。发布步骤仍返回上传/送审结果；后续状态可在商店开发者后台查看，或在具备凭据的本地环境运行 `python scripts/publish_chrome_store.py status`。该命令只查询，不提交、取消或发布。
 
 同版本已发布或待审核会跳过重复上传；不同版本待审、暂存、上传进行中或政策问题会停止并要求核查。上传处理最多轮询三分钟，审核异步进行。网络错误不自动重传/重提，结果未知先查状态和后台。实现位于 scripts/publish_chrome_store.py，只从环境读凭据，不记录令牌或 OAuth 错误响应体。
 

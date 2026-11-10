@@ -1,8 +1,8 @@
 # Saygo 1.0.0：后台浏览器操作与 Android 设置指引
 
 1.0.0 发布准备中，范围为 Python runtime、托管客户端插件和浏览器扩展。
-已获得提交、推送、PyPI 与浏览器插件发布授权；构建、发布 CI、公开文件及商店审核状态
-尚待核验，本说明不代表 1.0.0 已上线。原生桌面安装包不在本轮发布范围内。
+已获得提交、推送、PyPI 与浏览器插件发布授权；公开文件及商店审核状态尚待核验，
+本说明不代表 1.0.0 已上线。云端按用户要求仅构建和上传，所有云端检查已移除。原生桌面安装包不在本轮发布范围内。
 
 ## 行为变化
 
@@ -56,7 +56,8 @@ Android 指引此前有 180 项单元/契约通过记录，设备和 Windows/WSL
 Linux、Edge、Playwright 焦点/链接、Android/iOS 真机及原生桌面包尚未新增验收。
 
 1.0.0 本地 sdist→wheel 构建、严格 twine 检查、macOS 干净安装及重复 setup 已通过。
-发布 CI、PyPI/GitHub 公开下载核验、商店上传和审核状态待补录。[发布前商店核验](https://github.com/WilliamSkyWalker/saygo/actions/runs/42747930084)
+两轮云端 Linux 持久安装检查失败，后续包安装作业未运行；按用户要求移除所有云端检查，
+保留本地验收脚本，不把云端构建成功写作测试通过。PyPI/GitHub 公开下载、商店状态待补录。[发布前商店核验](https://github.com/WilliamSkyWalker/saygo/actions/runs/42747930084)
 确认当前为 0.4.21 `PUBLISHED` / 100%，`submitted: {}`；1.0.0 尚未公开发布。
 详细变更、命令、兼容性和后续发布状态见
 [1.0.0 发布记录](https://github.com/WilliamSkyWalker/saygo/blob/main/docs/common/history/release-1.0.0.md)。此前发布事实保留在

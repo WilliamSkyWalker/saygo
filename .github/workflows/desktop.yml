@@ -21,16 +21,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libegl1 libopengl0
-      - name: Require the Qt test dependency to load
-        run: python -c "from PySide6.QtWidgets import QApplication"
-      - run: python -m unittest discover -s tests/desktop_demo -v
-      - name: Qt startup
-        env:
-          QT_QPA_PLATFORM: offscreen
-        run: python -m saygo.desktop.app --smoke-test
       - run: python scripts/build_desktop.py
-      - name: Verify packaged Qt and native host with isolated state
-        run: python scripts/check_desktop_build.py
       - run: python scripts/package_desktop.py
       - uses: actions/upload-artifact@v4
         with:
