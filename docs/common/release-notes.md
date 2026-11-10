@@ -1,8 +1,10 @@
 # Saygo 1.0.0：后台浏览器操作与 Android 设置指引
 
-1.0.0 发布准备中，范围为 Python runtime、托管客户端插件和浏览器扩展。
-已获得提交、推送、PyPI 与浏览器插件发布授权；公开文件及商店审核状态尚待核验，
-本说明不代表 1.0.0 已上线。云端按用户要求仅构建和上传，所有云端检查已移除。原生桌面安装包不在本轮发布范围内。
+[PyPI 1.0.0](https://pypi.org/project/saygo-agent-control/1.0.0/) 和
+[GitHub 发布产物](https://github.com/WilliamSkyWalker/saygo/releases/tag/v1.0.0) 已公开，
+范围为 Python runtime、托管客户端插件和浏览器扩展。扩展 1.0.0 已送审，状态为
+`PENDING_REVIEW`；商店正式分发仍是 0.4.21。云端按用户要求仅构建和发布，所有云端
+检查已移除。用户安装未升级，原生桌面安装包不在本轮发布范围内。
 
 ## 行为变化
 
@@ -29,16 +31,17 @@
 
 ## 升级与已有会话
 
-发布完成后，按原安装方式升级 Python runtime，并重启 Agent 客户端。复制式插件安装
+按原安装方式升级 Python runtime，并重启 Agent 客户端。复制式插件安装
 按原客户端与目录重新 setup，保留用户配置。新动作需要匹配的 runtime 和浏览器实际
 加载的扩展；单独升级 Python 包不会更新已加载的扩展或在线 host。
+浏览器扩展可等待商店审核后的更新，或由用户明确选择手动加载 GitHub 的 1.0.0 开发包。
 
 已有会话和任务无需清空。逻辑选页现在保留当前可见标签，Agent 继续操作明确绑定页面。
 浏览器重启后的旧 page ID 仍须重新选择，未知输入不重放。发布过程不主动重载/断开
 用户扩展或结束在线 host，由用户决定重连及更新时机。商店提交、审核、实际分发和
 用户已加载新版分别核实；源码修改与旧桌面二进制也分别记录。
 
-## 已验证范围与待完成发布
+## 验证范围与发布状态
 
 升版前源码在 macOS arm64 上完成 90 项 JavaScript、20 项桥接、25 项共享服务及
 10 项桌面决策检查；普通发现跳过的 macOS live 另行显式运行，1 项通过。
@@ -52,13 +55,20 @@
 `1.0.0 Connected` 和两页输入结果。此项是源码实机复验，仍不等于发布包安装验收。
 
 Android 指引此前有 180 项单元/契约通过记录，设备和 Windows/WSL 宿主为模拟，
-不是本轮真机重测。本机缺少 Claude CLI，两项插件 validator 未运行。新版 Windows、
-Linux、Edge、Playwright 焦点/链接、Android/iOS 真机及原生桌面包尚未新增验收。
+不是本轮真机重测。本机缺少 Claude CLI，两项插件 validator 未运行。Linux 五项实际扩展用例（含选页）通过，但持久安装/重启失败。Windows/Edge 后台链接、
+Playwright 焦点/链接、Android/iOS 真机及原生桌面包尚未新增验收。
 
 1.0.0 本地 sdist→wheel 构建、严格 twine 检查、macOS 干净安装及重复 setup 已通过。
 两轮云端 Linux 持久安装检查失败，后续包安装作业未运行；按用户要求移除所有云端检查，
-保留本地验收脚本，不把云端构建成功写作测试通过。PyPI/GitHub 公开下载、商店状态待补录。[发布前商店核验](https://github.com/WilliamSkyWalker/saygo/actions/runs/42747930084)
-确认当前为 0.4.21 `PUBLISHED` / 100%，`submitted: {}`；1.0.0 尚未公开发布。
+保留本地验收脚本，不把云端构建成功写作测试通过。
+
+标签 `v1.0.0` 指向 `b7cc0e64c97908e16432e6cf07d68898f9b14352`。
+[PyPI 发布](https://github.com/WilliamSkyWalker/saygo/actions/runs/42805101211)与
+[GitHub / 商店发布](https://github.com/WilliamSkyWalker/saygo/actions/runs/42805101224)均成功。
+公开 PyPI JSON/simple 索引确认两个文件未撤回，GitHub 六个文件可下载，字节均匹配标签
+CI 产物；源码和扩展 ZIP 内容匹配发布源码。公开 wheel 的独立 macOS 干净安装、插件 doctor、MCP 导入及重复 setup 通过。
+商店返回 1.0.0 `PENDING_REVIEW`，正式版本仍是 0.4.21 `PUBLISHED` / 100%，
+不把送审成功称为审核通过或用户已加载新版。
 详细变更、命令、兼容性和后续发布状态见
 [1.0.0 发布记录](https://github.com/WilliamSkyWalker/saygo/blob/main/docs/common/history/release-1.0.0.md)。此前发布事实保留在
 [0.4.21 历史记录](https://github.com/WilliamSkyWalker/saygo/blob/main/docs/common/history/release-0.4.21.md)。

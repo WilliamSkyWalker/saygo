@@ -4,7 +4,7 @@
 浏览器扩展版本可独立于 Python 包版本。本次发布进度见 [1.0.0 记录](release-1.0.0.md)，此前发布验证见 [0.4.21](release-0.4.21.md)，
 先前的更新提醒修复见 [0.4.14 测试记录](release-0.4.14.md)。
 
-## 1.0.0 — 2026-11-10（发布准备中）
+## 1.0.0 — 2026-11-10（PyPI/GitHub 已发布，扩展待审核）
 
 - 按用户指令移除所有云端测试和校验任务，工作流只构建/上传/部署；本地脚本保留，Linux 持久安装失败及未执行项目如实记录。
 
@@ -12,9 +12,10 @@
 - 新增 `open_link_background`：驱动按观察坐标仅取 HTTP(S) 链接 URL，在后台新建标签并返回 ID；模型不接收 DOM，普通点击语义不变，点击处理器和任意脚本弹窗不由此复刻。
 - 共享 CLI/MCP/Runtime/桌面动作能力与操作协议同步；升级需要匹配 runtime 和浏览器实际加载的扩展，不自动重载用户扩展或关闭在线 host。
 - 纳入 `d58f6c8` 的 Android 结构化依赖诊断、macOS/Windows/WSL 主机指引与 `--tools-only` 工具链准备，保留 dry-run、许可确认和已有连接。
-- 升版前源码完成 90 项 JS、20 项桥接、25 项共享服务、10 项桌面决策及 1 项真实 macOS 扩展验收；Claude validator 本机不可用，其他新版平台与 1.0.0 构建安装尚待验证。
+- 升版前源码完成 90 项 JS、20 项桥接、25 项共享服务、10 项桌面决策及 1 项真实 macOS 扩展验收；Claude validator 本机不可用。1.0.0 本地构建、严格 twine 检查、macOS 预检包干净安装和重复 setup 通过；其他新版平台安装未验收。
 - 升版后 1.0.0 源码在 macOS 27.0 arm64 / Chrome 157.0.8103.50 另行真实复验：1 通过、0 失败、0 跳过，85.637 秒；已查看连接弹窗与两页输入 PNG。这不是发布包安装验收。
-- PyPI、GitHub 产物及 1.0.0 商店上传/审核/分发状态仍待核验；[发布前商店检查](https://github.com/WilliamSkyWalker/saygo/actions/runs/42747930084)确认为 0.4.21 `PUBLISHED` / 100%、`submitted: {}`，见[本版记录](release-1.0.0.md)。原生桌面安装包不在本轮发布范围内。
+- `v1.0.0` 指向 `b7cc0e6`；[PyPI 发布](https://github.com/WilliamSkyWalker/saygo/actions/runs/42805101211)与 [GitHub / 商店发布](https://github.com/WilliamSkyWalker/saygo/actions/runs/42805101224)成功。PyPI 两个未撤回文件、GitHub 六个文件已公开下载核对，与标签 CI 字节一致；公开 wheel 的独立 macOS 干净安装、doctor、MCP 和重复 setup 通过。
+- 扩展 1.0.0 已上传并提交，状态 `PENDING_REVIEW`；正式分发仍是 0.4.21 `PUBLISHED` / 100%。用户安装未升级，原生桌面安装包不在本轮发布范围内；失败检查、产物摘要及边界见[本版记录](release-1.0.0.md)。
 
 ## 0.4.20 — 2026-10-14（PyPI 已发布）
 

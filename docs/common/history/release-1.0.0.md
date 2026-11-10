@@ -1,9 +1,12 @@
-# 1.0.0 发布准备与验证
+# 1.0.0 发布与验证记录
 
 记录日期：2026-11-10。用户已授权升至 1.0.0、提交推送、发布 PyPI 和浏览器插件。
 本记录保存源码、本地构建和安装证据，以及发布过程的实际状态。用户随后明确要求
 “去掉所有云端检查”；云端改为只构建、上传和部署，测试脚本保留本地使用。
 原生桌面安装包不在本轮发布范围内。
+
+PyPI 和 GitHub 1.0.0 已公开发布并完成下载核对；浏览器扩展 1.0.0 已上传送审，
+状态为 `PENDING_REVIEW`，商店正式分发版本仍为 0.4.21。用户现有安装未升级。
 
 ## 修改范围
 
@@ -97,7 +100,7 @@ CLI/setup 帮助、首次 prepare-only setup、插件资源/版本与 doctor、M
 升版后另行执行 Node 全部回归：90 通过、1 项 opt-in live 跳过；Python 桥接 20、
 共享服务 25、桌面决策 10 项均通过。`render_requirement_cases.py --check` 确认
 638 个独立 BDD / unittest 用例同步，`git diff --check` 通过。
-本地包仅作预检，正式发布产物仍由匹配标签的 CI 重新构建和检验。
+本地包仅作预检，正式发布产物由匹配标签的 CI 重新构建；公开产物的本地核对见下文。
 
 ## 云端流程调整与失败记录
 
@@ -121,33 +124,70 @@ MCP/桥接/浏览器、三平台安装冒烟、桌面测试/冻结包检查、�
 
 ## 升级与兼容性
 
-1.0.0 发布完成后，按原安装方式升级 Python runtime，并重启 Agent 客户端加载动作协议。
+按原安装方式升级 Python runtime，并重启 Agent 客户端加载动作协议。
 复制式插件安装需要按原客户端及目录重新 setup，以更新共享 Skill；保留无关客户端配置。
 后台链接动作需要匹配的 runtime 与实际加载的扩展，Python 包升级不能替代浏览器扩展更新。
 核对磁盘注册、在线 host 与浏览器实际加载版本，不能仅比较包版本。
+商店扩展 1.0.0 仍待审核；需要新版扩展时可等待商店更新，或由用户明确选择手动加载
+GitHub 上的 1.0.0 开发包。本轮未代用户执行升级、重连或重载。
 
 逻辑选页与此前可见标签切换不同：用户可继续停留在当前标签，Agent 的观察和输入作用于
 明确绑定的另一页。会话和任务数据库不要求清空；浏览器重启导致旧 page ID 失效时仍须显式重选。
 不重放未知结果的输入，不自动重载或断开用户扩展，不结束在线 native host；由用户选择升级、
 重连或手动加载开发包的时机。商店送审、审核通过、实际分发和用户已加载新版必须分别确认。
 
-## 发布检查与状态
+## 已发布产物与状态
 
 本轮[发布前只读商店核验](https://github.com/WilliamSkyWalker/saygo/actions/runs/42747930084)
-确认当前发布版本为 0.4.21，状态 `PUBLISHED`、分发比例 100%，`submitted` 为 `{}`。
-这是旧版本的当前分发状态，不表示 1.0.0 已上传、提交审核或上线。
+在上传前确认正式版本为 0.4.21，状态 `PUBLISHED`、分发比例 100%，`submitted` 为 `{}`。
+随后从标签 `v1.0.0` 构建并发布：标签指向提交
+`b7cc0e64c97908e16432e6cf07d68898f9b14352`，annotated tag 对象为
+`5a9dcdf4c38820104fb07f22f65f1f06f52c1291`。
+
+[Python package 发布流程](https://github.com/WilliamSkyWalker/saygo/actions/runs/42805101211)
+和 [GitHub / 浏览器商店发布流程](https://github.com/WilliamSkyWalker/saygo/actions/runs/42805101224)
+均成功。两者仅执行构建和发布，不含已删除的云端检查，不能据此声称三平台安装或 Linux
+持久安装通过。GitHub Release 于 2026-11-10 11:09:23 UTC 公开，非草稿、非预发布。
+
+公开 [PyPI 1.0.0](https://pypi.org/project/saygo-agent-control/1.0.0/) 的 JSON 和 simple
+索引均确认 wheel/sdist 存在且未撤回；下载字节与标签 CI 产物一致。
+[GitHub Release](https://github.com/WilliamSkyWalker/saygo/releases/tag/v1.0.0) 的六个文件
+均公开可下载且字节匹配 CI；源码及两种扩展 ZIP 内容与本地发布源码一致。
+`release-manifest.json` 和 `SHA256SUMS` 也已核对，主要文件摘要如下：
+
+| 渠道 / 文件 | 字节数 | SHA256 |
+| --- | ---: | --- |
+| PyPI / `saygo_agent_control-1.0.0-py3-none-any.whl` | 1130616 | `420b4a2abab5380246fa003f126a9aace7c6c04a38eea62a65cc214845b5e159` |
+| PyPI / `saygo_agent_control-1.0.0.tar.gz` | 609761 | `c454a360bfdc3e1d6e2cbe6845c68ca29b51427682fa87623d50b8af45afe8fb` |
+| GitHub / `saygo-1.0.0.zip` | 709726 | `725534f289418103baf589dae3374819dfae1efaddcf816a1132b6561a670ac4` |
+| GitHub / `install-saygo-1.0.0.py` | 28400 | `31f5701fcd86c16db2fc85cd4eee76118549b7399f4de4990f446351f022c310` |
+| GitHub / `saygo-browser-1.0.0-development.zip` | 21847 | `71a5d94791bd137e65dd85a62f8566b9676500f05263a128f17c952b11e6d0de` |
+| GitHub / `saygo-browser-1.0.0-store.zip` | 21506 | `9d068ea9d2ff9ce87aa61880761a073cc8d020bd17b61a56a0d994d5ed127a44` |
+
+实际从 PyPI 下载并核对 SHA256 的 wheel 已在 macOS 27.0 arm64 / Python 3.15.2 的
+独立临时 venv 中执行 `python scripts/check_python_package.py <downloaded-wheel>`：
+安装、CLI/setup 帮助、首次 prepare-only setup、插件资源/doctor、MCP 导入及重复 setup
+全部通过，退出码 0。该流程没有向用户客户端注册，也没有升级用户安装。
+[线上隐私说明](https://saygo.work/privacy.html) 已核对与本地文件一致，SHA256 为
+`466a3fd46fae3d0527bcec1ee19fc3ba11238fd9deb8a3d657577e172b18d6d9`。
+
+[商店作业日志](https://github.com/WilliamSkyWalker/saygo/actions/runs/42805101224/job/129792205080)
+在 2026-11-10 11:09:39 UTC 返回 `Submission response: PENDING_REVIEW`，随后状态中
+`submitted` 为 1.0.0 / `PENDING_REVIEW` / 100%，`published` 仍为
+0.4.21 / `PUBLISHED` / 100%。这证明新版已上传并送审，不代表审核通过或用户已获得新版。
 
 | 项目 | 当前记录 |
 | --- | --- |
-| 1.0.0 版本元数据、提交与标签 | 六处版本元数据统一为 1.0.0；浏览器修复提交 `0874dd1`，发布提交及标签待远端核对 |
+| 1.0.0 版本元数据、提交与标签 | 六处版本元数据统一为 1.0.0；浏览器修复提交 `0874dd1`；远端 `v1.0.0` 指向 `b7cc0e6`，完整提交与 tag 对象见上文 |
 | 1.0.0 本地构建、文件白名单与 SHA256 | sdist→wheel 构建、两项严格 twine 检查通过；六处版本、四项产物摘要、源码/扩展 ZIP 文件排除规则及商店包无 key 均核对通过 |
-| 云端流程与安装验收 | 两轮 Linux 持久安装检查失败；按用户指令删除所有云端检查。本地 macOS wheel 干净安装、doctor、MCP 和重复 setup 通过；新版 Windows/Linux 包安装未验收 |
-| PyPI wheel/sdist | 待发布；公开索引、下载摘要及构建产物一致性待核验 |
-| GitHub 发布产物 | 待构建/发布及公开下载核验 |
-| 浏览器商店上传与提交审核 | 待执行；未记录 1.0.0 送审成功 |
-| 浏览器商店审核与分发 | 发布前核验为 0.4.21 `PUBLISHED` / 100%，`submitted: {}`；1.0.0 审核与分发尚未发生，不以流程成功代替上线 |
+| 云端流程与安装验收 | 两轮 Linux 持久安装检查失败；按用户指令删除所有云端检查。本地预检 wheel 干净安装、doctor、MCP 和重复 setup 通过；公开 wheel 的独立本地干净安装及重复 setup 也通过；新版 Windows/Linux 包安装未验收 |
+| PyPI wheel/sdist | 已公开，未撤回；JSON/simple 索引、公开下载与标签 CI 产物字节一致性已核对 |
+| GitHub 发布产物 | 已正式发布六个文件，公开下载与 CI 字节一致；ZIP 内容与发布源码一致 |
+| 浏览器商店上传与提交审核 | 1.0.0 上传和提交成功，`submitted.state=PENDING_REVIEW` |
+| 浏览器商店审核与分发 | 正式分发仍为 0.4.21 `PUBLISHED` / 100%；1.0.0 待审核，不能以送审作业成功代替上线 |
 | 用户安装环境 | 本轮源码验证未升级当前用户安装、重载其扩展或关闭已有 host |
 | 原生桌面二进制 | 不在本轮发布范围；源码/离线桌面决策检查不等于桌面安装包更新 |
 
-本轮尚无 Windows、Linux、Edge 或 Playwright 的新版焦点/链接真实验收；也未新增 Android、
-iOS 真实设备验收。完整平台矩阵、构建产物安装与分发状态须依据后续实际结果补录，不能宣称六端全部通过。
+本轮 macOS 完成选页与后台链接全链路实测；Linux 五项实际扩展用例（含选页）通过，
+持久安装/重启失败，后台链接未单独实测。Windows/Edge 后台链接、Playwright 焦点/链接、
+Android/iOS 真机和原生桌面包未新增验收；商店后续审核结果仍须另行核对，不能宣称六端全部通过。
