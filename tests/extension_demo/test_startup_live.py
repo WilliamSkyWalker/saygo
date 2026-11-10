@@ -1,5 +1,7 @@
 """Opt-in browser restart checks with a real extension and isolated native host."""
 from contextlib import ExitStack
+import base64
+import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
@@ -70,6 +72,12 @@ class ExtensionStartupLive(unittest.TestCase):
         # directory instead of submitting the complete typed extension path.
         xdo('mousemove', '--window', dialog, int(geometry['WIDTH']) - 50,
             int(geometry['HEIGHT']) - 24, 'click', 1)
+        # Confirm the native picker actually installed the extension before
+        # diagnosing CDP worker discovery. Keep this a persistent UI install.
+        name = json.loads((extension / 'manifest.json').read_text())['name']
+        installed = page.locator('extensions-item').filter(has_text=name)
+        installed.wait_for(state='visible', timeout=10000)
+        self.assertEqual(installed.count(), 1, 'Expected one installed fixture extension')
 
     def status(self, ui):
         return ui.evaluate("() => chrome.runtime.sendMessage({type:'status'})")
@@ -107,6 +115,12 @@ class ExtensionStartupLive(unittest.TestCase):
             source = Path(os.environ.get('SAYGO_TEST_EXTENSION', 'extensions/saygo-browser')).resolve()
             extension = root / 'extension'
             shutil.copytree(source, extension)
+            # The development manifest key fixes the identity across the three
+            # launches. Opening its popup proves the persistent install exists;
+            # CDP service-worker enumeration is not an installation oracle.
+            extension_manifest = json.loads((extension / 'manifest.json').read_text())
+            key_digest = hashlib.sha256(base64.b64decode(extension_manifest['key'], validate=True)).hexdigest()[:32]
+            expected_id = ''.join(chr(ord('a') + int(digit, 16)) for digit in key_digest)
             browser_env = {**os.environ, 'HOME': tmp, 'XDG_CONFIG_HOME': str(root / '.config'),
                            'LANG': 'C.UTF-8', 'LC_ALL': 'C.UTF-8'}
             cli_env = {**os.environ, 'SAYGO_HOME_DIR': str(root / 'saygo-home'),
@@ -157,15 +171,18 @@ class ExtensionStartupLive(unittest.TestCase):
                 try:
                     if first_install:
                         self.install_extension(context, context.pages[0], extension)
-                    worker = (context.service_workers[0] if context.service_workers else
-                              context.wait_for_event('serviceworker', timeout=10000))
-                    extension_id = worker.url.split('/')[2]
                     page = context.pages[0]
                     page.goto(url)
                     ui = context.new_page()
-                    ui.goto(f'chrome-extension://{extension_id}/popup.html')
+                    ui.goto(f'chrome-extension://{expected_id}/popup.html')
+                    identity = ui.evaluate('''() => ({id: chrome.runtime.id,
+                        version: chrome.runtime.getManifest().version})''')
+                    self.assertEqual(identity, {'id': expected_id, 'version': extension_manifest['version']})
+                    # popup/status only wakes the worker; it never connects the
+                    # bridge. The unchanged assertions below test onStartup.
+                    self.assertIsInstance(self.status(ui), dict)
                     page.bring_to_front()
-                    return context, page, ui, extension_id
+                    return context, page, ui, identity['id']
                 except Exception:
                     context.close()
                     raise
