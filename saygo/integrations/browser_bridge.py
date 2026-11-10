@@ -18,7 +18,7 @@ import uuid
 HOST = "com.saygo.browser"
 MAX_FRAME = 1024 * 1024
 PROTOCOL = 1
-VERSION = "0.4.21"
+VERSION = "1.0.0"
 RESPONSE_TIMEOUT = 30
 MAX_RESPONSE_BYTES = 32 * MAX_FRAME
 

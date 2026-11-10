@@ -36,9 +36,9 @@ pipx uninstall saygo-agent-control
 
 旧版复制运行时安装需要在升级到含修复的包后执行一次 `saygo setup --client ...` 迁移。新包启动 MCP 时准备新版 host 文件，已有连接继续运行直到用户重连，不主动断开扩展。卸载只删除本安装拥有且未被用户改动的注册，保留运行时、扩展文件、任务和截图；扩展本体通过浏览器删除。
 
-## Android 首次使用诊断（当前源码，未发布）
+## Android 首次使用诊断（1.0.0）
 
-当前源码在 Android 发现/连接遇到缺依赖时，通过 CLI/MCP 的 `setup` 字段返回缺失项、主机和可执行建议；它是诊断结果，不会自动执行 `saygo setup` 或安装。也可运行：
+Saygo 1.0.0 在 Android 发现/连接遇到缺依赖时，通过 CLI/MCP 的 `setup` 字段返回缺失项、主机和可执行建议；它是诊断结果，不会自动执行 `saygo setup` 或安装。也可运行：
 
 ```sh
 saygo doctor --platform android --host auto
@@ -48,7 +48,7 @@ macOS 和原生 Windows 检查本机工具，可显式用 `--host local`。WSL �
 
 真机工具链用 `saygo device install --platform android --host local --tools-only --dry-run` 先预览，再明确去掉 `--dry-run` 安装；WSL 选择 Windows 宿主时使用 `--host windows`。先审阅 SDK 许可，无人值守接受需显式 `--accept-licenses`。此模式补齐 Java/SDK/Appium，不安装模拟器、镜像或 AVD，不要求硬件加速，且不能与 `--boot`/`--connect` 组合。远程 Appium 使用 `saygo doctor --platform android --server-url http://android-host.example:4723`，只检查客户端依赖，服务器工具由远端准备。
 
-这些诊断与 `--tools-only` 尚未进入正式发布包；源码检查或模拟测试通过不代表现有安装版已经获得，也不代表设备可控。准备后须重新连接并核验真实截图。完整步骤见 [Android 首次使用](../android/README.md#首次使用与依赖诊断)。
+这些诊断与 `--tools-only` 属于 1.0.0，发布与安装验证状态见[1.0.0 记录](history/release-1.0.0.md)。须以实际安装版本为准；源码检查或模拟测试通过不代表设备可控。准备后须重新连接并核验真实截图。完整步骤见 [Android 首次使用](../android/README.md#首次使用与依赖诊断)。
 
 ## 项目开发安装
 
