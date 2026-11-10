@@ -4,7 +4,7 @@
 
 ## 身份与状态
 
-商店名称 Saygo Browser，ID 为 ehomcchjfomfkcmbeinlcmpbaamdhfbo，[安装入口](https://chromewebstore.google.com/detail/ehomcchjfomfkcmbeinlcmpbaamdhfbo)。开发 ID 和 manifest key 不用于商店上传。扩展与 Python 运行时版本独立；定点滚动最低运行时为 Saygo 0.4.11、桥协议 1。
+商店名称 Saygo Browser，ID 为 ehomcchjfomfkcmbeinlcmpbaamdhfbo，[安装入口](https://chromewebstore.google.com/detail/ehomcchjfomfkcmbeinlcmpbaamdhfbo)。开发 ID 和 manifest key 不用于商店上传。扩展与 Python 运行时分别发布；本次提交目标为扩展 1.0.0，后台链接动作使用配套的 Saygo 1.0.0 运行时，桥协议仍为 1。定点滚动原有最低运行时为 Saygo 0.4.11。本页的版本目标不代表已上传、审核通过或用户已安装。
 
 旧材料在 2026-10-03 记录 0.4.8 已公开、0.4.12 待审核；后续 [2026-10-12 发布记录](../common/history/release-0.4.16.md)记录 0.4.13 为 PUBLISHED。这些是历史证据，实际审核状态通过只读工作流查询，不以旧材料代替实时核对。
 
@@ -45,17 +45,19 @@ Google Cloud 启用 Chrome Web Store API，创建 Web OAuth 客户端，将 http
 
 Saygo Browser 将现有浏览器标签页连接到本机 Saygo，让 AI 编程助手协助操作和调试网站。支持截图、点击、文字输入、拖动、导航与指定区域滚动，也提供 HTTP 请求/响应、WebSocket 和服务器发送事件等网络观察。
 
+1.0.0 的选页只改变 Agent 的操作目标，保留当前可见标签与桌面前台应用。需要后台打开普通网页链接时，Agent 可按截图坐标请求 `open_link_background`：驱动仅在内部读取该点的普通 HTTP(S) 链接地址，在同窗口创建非活动标签，返回新页面身份，原操作目标不变。此动作不执行点击处理器，不复制链接的 opener、referrer 或命名窗口语义。普通点击仍可能打开使浏览器前置的标签或脚本弹窗，不能将此动作描述为任意网页弹窗的通用后台模式。
+
 用户点击“连接本地桥”开始，当前配置文件中的可控网站标签（包括新标签和弹窗）即可由本地 Agent 使用。点击“释放浏览器并断开”停止控制并清空扩展网络日志，网站登录状态仍保留在浏览器。
 
 扩展需要单独安装 Saygo 与兼容 AI 客户端：从 PyPI 安装 saygo-agent-control，为客户端执行 saygo setup 并注册本扩展的桥。扩展不包含 AI 模型或订阅，项目按 MIT 开源。
 
-连接期间可访问页面 URL、标题、截图、表单输入和网络内容，可能包括 cookie、令牌等敏感信息。数据交给本机运行时，AI 客户端可能再发送到其模型服务。Saygo 无开发者分析统计接口、不出售资料；断连后本地任务记录可能保留。仅连接愿意分享的浏览器配置文件，chrome:// 等受限制页面不支持。
+连接期间可访问页面 URL、标题、截图、表单输入和网络内容；显式后台链接动作还在驱动内部读取所选坐标处的链接 URL。内容可能包括 cookie、令牌等敏感信息。数据交给本机运行时，AI 客户端可能再发送到其模型服务。后台链接动作不向 Agent 或模型返回 DOM、节点树或链接文本。Saygo 无开发者分析统计接口、不出售资料；断连后本地任务记录可能保留。仅连接愿意分享的浏览器配置文件，chrome:// 等受限制页面不支持。
 
 ## 隐私申报
 
 单一用途为用户授权的浏览器操作与调试。权限理由：
 
-- debugger：截图、指针/键盘/滚轮及 HTTP/WebSocket/SSE 观察；CDP 操作有固定白名单，不提供任意脚本工具，需用户连接，释放后分离调试器。
+- debugger：截图、指针/键盘/滚轮、HTTP/WebSocket/SSE 观察，以及显式后台链接动作的有限坐标 URL 读取。后者使用 `DOM.getNodeForLocation`、`Page.createIsolatedWorld`、`DOM.resolveNode`、`Runtime.callFunctionOn` 与 `Runtime.releaseObjectGroup`；函数随扩展打包，最多检查八层祖先，只返回链接 URL 或错误，不返回 DOM 或文本，不执行点击处理器。CDP 操作有固定白名单，不接受外部脚本或通用 DOM 查询，需用户连接，释放后分离调试器。
 - tabs：发现 HTTP(S) 标签、读取 URL/标题、按用户请求选择/创建/导航/关闭，新页供显式选择。
 - storage：保存会话级浏览器身份和已释放标签，避免取消失效或旧 ID 误绑，不建广告画像。
 - nativeMessaging：与本机 com.saygo.browser host 交换分帧 JSON，不开放远控服务器。
@@ -69,13 +71,14 @@ Saygo Browser 将现有浏览器标签页连接到本机 Saygo，让 AI 编程�
 测试不需要 Saygo 账号或付款，使用干净浏览器配置与自有测试页：
 
 1. 准备 Python 3.10+、pipx、所选客户端 CLI，安装待审扩展包。
-2. 运行 `pipx install 'saygo-agent-control[mcp]>=0.4.12'`。
+2. 运行 `pipx install 'saygo-agent-control[mcp]==1.0.0'`，与待审的 1.0.0 扩展配套；提交审核前须先核验该 PyPI 版本可安装。
 3. 运行 `saygo setup --client codex --extension-id ehomcchjfomfkcmbeinlcmpbaamdhfbo`，按需换客户端；WSL 从 WSL 安装以准备 Windows host，macOS/Linux 在浏览器所在系统执行。
 4. 打开 https://example.com/，在扩展点击 Connect local bridge，检查已连接和测试页标题。测试商店 ID 时不要加载开发扩展。
 5. `saygo device connect --platform browser --session store-review --backend extension` 后 pages，再 `select-page PAGE_ID` 选择目标。
 6. `saygo device screenshot --session store-review --out /tmp/saygo-review.png`，Windows 使用可写 Windows 路径，实际读取图像。
 7. 在可滚动测试页先观察，再用带 observation-id 的 scroll_at 动作，坐标为百分比，正上负下，并检查新图。
-8. 用户点击 Release browser and disconnect，确认断开后控制失败，显式重连前不隐藏重建连接。
+8. 在自有测试页放置普通 HTTP(S) 链接，先截图观察，再用带 observation-id 的 `open_link_background` 动作指定链接的百分比坐标。核验新增标签非活动、原操作目标不变，按返回的 `created_page_id` 显式选页并读取截图；下载链接、非 HTTP(S) 链接和非链接坐标应明确拒绝。普通点击处理器不属于此动作的执行范围。
+9. 用户点击 Release browser and disconnect，确认断开后控制失败，显式重连前不隐藏重建连接。
 
 host 缺失表示需安装配套软件，不是网站登录错误。提交前还需核对联系人、隐私 URL、128×128 图标、真实 1280×800/640×400 截图、440×280 宣传图与分发字段；审核后实际商店安装、更新、删除独立验证。
 

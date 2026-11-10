@@ -20,6 +20,17 @@ function browser(state = 'normal') {
     chrome:{
       storage:{local:{get:async () => ({})}, session:{get:async () => ({epoch:'test', blocked:[]})}},
       tabs:{query:async () => tabs,
+        create:async options => {
+          changes.push({create:{...options}});
+          const windowId = options.windowId ?? 20;
+          const active = options.active ?? true;
+          if (active) for (const item of tabs) {
+            if (item.windowId === windowId) item.active = false;
+          }
+          const tab = {id:4, windowId, url:options.url, active};
+          tabs.push(tab);
+          return tab;
+        },
         update:async (id, options) => {
           const tab = tabs.find(t => t.id === id);
           changes.push({tab:id, options});
@@ -39,20 +50,35 @@ function browser(state = 'normal') {
   });
   vm.runInContext(source.replace("import {NetworkJournal} from './network.js';", '') +
     '\nport = {}; negotiated = true;', context);
-  return {tabs, windows, changes, select:id => context.runRequest('select', {page_id:id})};
+  return {tabs, windows, changes,
+    select:id => context.runRequest('select', {page_id:id}),
+    create:url => context.runRequest('new_page', {url}),
+    disconnect:() => vm.runInContext('port = null; negotiated = false;', context)};
 }
 
 for (const state of ['normal', 'maximized', 'minimized']) {
-  test(`selecting and reselecting a tab preserves the foreground ${state} window state`, async () => {
+  test(`selecting and reselecting a tab preserves activity and ${state} window state`, async () => {
     const b = browser(state);
-    const before = structuredClone(b.windows);
-    for (const page of ['test:2', 'test:2', 'test:1']) {
+    const before = structuredClone({tabs:b.tabs, windows:b.windows});
+    for (const page of ['test:2', 'test:2', 'test:1', 'test:3']) {
       await b.select(page);
-      assert.equal(b.tabs.find(t => t.windowId === 10 && t.active).id, Number(page.split(':')[1]));
-      assert.deepEqual(b.windows, before);
-      assert.equal(b.changes.some(change => 'window' in change), false);
-      assert.equal(b.tabs[2].active, true);
+      assert.deepEqual({tabs:b.tabs, windows:b.windows}, before,
+        'logical selection must leave every visible tab and window unchanged');
+      assert.deepEqual(b.changes, [], 'selection must not dispatch tab/window updates');
     }
+  });
+
+  test(`creating a page leaves existing tabs and ${state} windows unchanged`, async () => {
+    const b = browser(state);
+    const before = structuredClone({tabs:b.tabs, windows:b.windows});
+    const url = 'https://example.test/created';
+    const result = await b.create(url);
+    assert.equal(result.page_id, 'test:4');
+    assert.deepEqual(b.changes, [{create:{url, active:false}}]);
+    assert.deepEqual(b.tabs.slice(0, before.tabs.length), before.tabs);
+    assert.deepEqual(b.windows, before.windows);
+    assert.equal(b.tabs.at(-1).url, url);
+    assert.equal(b.tabs.at(-1).active, false);
   });
 }
 
@@ -61,5 +87,25 @@ test('stale and closed page selections fail without changing any tab or window',
   for (const page of ['old:2', 'test:999']) {
     await assert.rejects(b.select(page), /Page closed, control released or browser restarted/);
   }
+  assert.deepEqual(b.changes, []);
+});
+
+test('unsupported new-page URLs fail before creating a tab', async () => {
+  const b = browser();
+  const before = structuredClone({tabs:b.tabs, windows:b.windows});
+  for (const url of ['about:blank', 'file:///fixture.html', 'javascript:void(0)', '']) {
+    await assert.rejects(b.create(url), /Only HTTP\(S\) navigation is allowed/);
+  }
+  assert.deepEqual({tabs:b.tabs, windows:b.windows}, before);
+  assert.deepEqual(b.changes, []);
+});
+
+test('disconnected selection and creation fail without changing tabs or windows', async () => {
+  const b = browser();
+  const before = structuredClone({tabs:b.tabs, windows:b.windows});
+  b.disconnect();
+  await assert.rejects(b.select('test:2'), /Page closed, control released or browser restarted/);
+  await assert.rejects(b.create('https://example.test/created'), /Browser is disconnected/);
+  assert.deepEqual({tabs:b.tabs, windows:b.windows}, before);
   assert.deepEqual(b.changes, []);
 });

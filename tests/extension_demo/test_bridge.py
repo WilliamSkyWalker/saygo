@@ -75,6 +75,48 @@ class BridgeTests(unittest.TestCase):
             dispatch(p, action)
             call.assert_called_with('scroll_at', x=250, y=400, amount=-3)
 
+    def test_background_link_capability_coordinates_and_selected_page(self):
+        from unittest.mock import Mock
+        from saygo.devices.actions import capabilities, prepare, dispatch
+        p = ExtensionBrowserPlatform()
+        p._page_id = 'epoch:2'
+        p.client = Mock()
+        p.client.call.side_effect = [[1000, 800], {'page_id': 'epoch:3'}]
+        self.assertIn('open_link_background', capabilities(p)['actions'])
+        action = prepare(p, {'type': 'open_link_background', 'x_pct': 25, 'y_pct': 50})
+        self.assertEqual(action, {'type': 'open_link_background', 'x': 250, 'y': 400,
+                                  'coordinate_space': 'screen'})
+        result = dispatch(p, action)
+        p.client.call.assert_called_with('open_link_background', page_id='epoch:2', x=250, y=400)
+        self.assertEqual(p.page_id, 'epoch:2')
+        self.assertEqual(result, {'dispatched': True, 'created_page_id': 'epoch:3',
+                                  'business_success': None, 'requires_observation': True})
+
+    def test_background_link_rejects_invalid_coordinates_before_input(self):
+        from saygo.devices.actions import prepare
+        p = ExtensionBrowserPlatform()
+        with patch.object(p, '_call', return_value=[1000, 800]) as call:
+            for values in ({'x': -1, 'y': 50}, {'x': 101, 'y': 50}, {'x': 50, 'y': float('nan')}, {'x': 50}):
+                with self.subTest(values=values), self.assertRaises(ValueError):
+                    prepare(p, {'type': 'open_link_background', 'coordinate_space': 'percent', **values})
+            self.assertEqual(call.call_count, 4)
+            self.assertTrue(all(item.args[0] == 'size' for item in call.call_args_list))
+
+    def test_background_link_is_not_advertised_or_dispatched_on_other_backends(self):
+        from saygo.devices.actions import capabilities, prepare
+        from saygo.platforms.browser_playwright import PlaywrightBrowserPlatform
+        class OtherPlatform:
+            platform_name = 'mac'
+            @property
+            def screen_size(self):
+                raise AssertionError('Unsupported action must fail before accessing the device')
+        for platform in (PlaywrightBrowserPlatform(), OtherPlatform()):
+            with self.subTest(platform=type(platform).__name__):
+                self.assertNotIn('open_link_background', capabilities(platform)['actions'])
+                with self.assertRaisesRegex(ValueError, 'Unsupported action: open_link_background'):
+                    prepare(platform, {'type': 'open_link_background', 'x': 25, 'y': 50,
+                                       'coordinate_space': 'percent'})
+
     def test_qa_scroll_uses_shared_fractional_amount_validation(self):
         p = ExtensionBrowserPlatform()
         with patch.object(p, '_call', return_value=[1000, 800]) as call:

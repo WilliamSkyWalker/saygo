@@ -10,6 +10,14 @@ from saygo.desktop.runner import TaskLoop, decision
 
 
 class DesktopTests(unittest.TestCase):
+    def test_background_link_decision_requires_percent_coordinates(self):
+        action = {'type': 'open_link_background', 'x': 25, 'y': 50, 'coordinate_space': 'percent'}
+        value = {'kind': 'act', 'resource': 'web', 'note': 'Open the visible link in a background tab', 'action': action}
+        self.assertEqual(decision(json.dumps(value), {'web': {}})['action'], action)
+        value['action'] = {**action, 'coordinate_space': 'screen'}
+        with self.assertRaisesRegex(ValueError, '百分比'):
+            decision(json.dumps(value), {'web': {}})
+
     def test_scroll_decisions_receive_units_and_before_after_images(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'image.png'

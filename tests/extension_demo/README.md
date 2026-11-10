@@ -71,10 +71,74 @@ case along with the background capture/scroll cases.
 `test_cli_page_selection_preserves_foreground_window` requires headed Chromium.
 It uses the same isolated profile, real extension and native host, with a separate
 window kept in front. Real CLI requests select an inactive tab, select it again,
-and connect with an explicit page ID. Each must select the intended tab while
-leaving the other window focused. On Linux, the test also checks the actual X11
+and connect with an explicit page ID. Each must bind the intended page while
+preserving the visible active tabs and leaving the other window focused. On Linux, the test also checks the actual X11
 active window and stacking order through `xprop`; run it under Xvfb with a window
 manager. This covers selection separately from background capture and input.
+
+`test_selection.mjs` verifies that logical page selection leaves every tab's
+activity and window state unchanged, while background creation preserves existing
+tabs. Stale page IDs, invalid URLs and disconnected calls must fail without changes.
+
+`test_focus_mac_live.mjs` is an opt-in macOS check with a disposable browser
+profile, extension copy, randomly named native host and an owned AppKit window.
+It checks frontmost application PID and window order during real CLI selection,
+creation, screenshots, input and `open_link_background` on an ordinary
+`target="_blank"` anchor. The driver reads only the hyperlink URL at the observed
+coordinates and creates an inactive tab; it does not run the link's click
+handlers. The test checks the returned page ID, preserved selection, and rejection
+of a button without a hyperlink without opening another page. It then verifies
+the new page's background screenshot and input. Read-only tab oracles use the extension worker
+(or explicit CDP `userGesture:false`); DOM result checks run after all foreground
+assertions. This avoids page-evaluation user gestures contaminating focus tests.
+Initial attachment must finish before a one-second idle baseline; screenshots
+are not prewarmed. Arbitrary JavaScript-created windows are outside this check.
+`focus_mac_fixture.py` requires PyObjC AppKit/Quartz; the Python interpreter also
+needs the Saygo dependencies. The Node environment needs Playwright or
+`SAYGO_TEST_PLAYWRIGHT_MODULE` pointing to a compatible Playwright module.
+The browser must support `Extensions.loadUnpacked` via its debugging pipe.
+Ordinary Node discovery skips this test; a skip is not macOS acceptance.
+`SAYGO_TEST_FOCUS_LEFT_CLICK=1` instead exercises the ordinary left-click
+foregrounding reproduction. It is expected to fail on affected macOS Chrome and
+never counts as a passing background-link acceptance run. Optional
+`SAYGO_TEST_FOCUS_DIAGNOSTICS=1` separates CLI page listing, raw selection and
+capture probes before the acceptance sequence.
+
+```sh
+SAYGO_TEST_HEADED=1 SAYGO_TEST_CHROME=/path/to/chrome \
+  SAYGO_TEST_PYTHON=/path/to/python3 \
+  SAYGO_TEST_FOCUS_SCREENSHOT=/tmp/saygo-focus-result.png \
+  node --test tests/extension_demo/test_focus_mac_live.mjs
+```
+
+With `SAYGO_TEST_FOCUS_SCREENSHOT` set, the run retains the input-result PNG plus
+`-popup.png` showing the connected extension and `-webpage-popup.png` showing the
+background-opened page's input result. `SAYGO_TEST_FOCUS_POPUP_SCREENSHOT` can
+override the extension-popup path. Inspect these images alongside the assertions;
+an available screenshot path alone is not visual acceptance.
+
+Validation on 2026-11-09 (unreleased source, macOS arm64, Chrome 157.0.8103.39):
+
+- The real CLI/native-host/extension run passed logical selection/reselection,
+  inactive tab creation, coordinate link-URL opening, and screenshot/input on both
+  the original and newly opened pages. The owned foreground app retained its PID
+  and window order throughout. A non-link button was rejected without creating a
+  page. The connected extension popup and both input-result PNGs were inspected.
+- Ordinary left-click and middle-click link experiments both foregrounded Chrome;
+  neither gesture is used by `open_link_background`. URL opening does not execute
+  the fixture's click handler. The old extension still changed the visible active
+  tab under the corrected selection test; this is distinct from OS activation.
+- Earlier page-level Playwright oracle calls carried a synthetic user gesture.
+  The final test uses worker queries or explicit `userGesture:false`, checks the
+  oracle itself, and samples an idle baseline before cold screenshot requests.
+- Offline checks: 90 JavaScript tests passed (the opt-in macOS case is separately
+  skipped in ordinary discovery), 20 bridge tests, 25 shared-service tests and
+  10 desktop decision tests passed. Same-document detached-node rejection,
+  navigation/timeout during lookup and uncertain creation have mock coverage.
+- Windows/Linux and other browser versions were not run for this change. Mobile,
+  Playwright and arbitrary JavaScript-created windows are outside this acceptance.
+  `claude plugin validate` could not run because the Claude CLI was unavailable.
+  No user-installed extension was updated/reloaded; no version bump or release.
 
 `test_capture.mjs` uses mocked window states (including minimized) to ensure
 requests never activate tabs or change focus. These are control-policy checks,

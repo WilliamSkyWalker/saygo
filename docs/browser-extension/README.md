@@ -37,7 +37,7 @@ python -m saygo.integrations.browser_setup --extension-id ehomcchjfomfkcmbeinlcm
 
 打开普通网页，在扩展弹窗点击 **Connect local bridge（连接本地桥）**，再重启 Agent 客户端。连接后所有现有及新增网站标签页都可发现，不需逐页分享。Chrome 可能显示正常的调试控制提示条。
 
-当前源码会在本浏览器配置中记住连接开关：成功连接后，下次启动浏览器自动连接一次；点击 **Release browser and disconnect（释放浏览器并断开）** 后，重启仍保持关闭。弹窗显示下次启动是否连接。首次安装或旧版本没有记录时默认关闭，需要手动连接一次；普通后台 worker 唤醒或扩展重载不会触发自动连接。0.4.21 Python 包和扩展 ZIP 已公开核验，扩展于 2026-11-06 送审，状态为 `PENDING_REVIEW`（商店仍分发 0.4.17）；详见[发布验收](../common/history/release-0.4.21.md)。已有安装版不会因 Python 包升级而获得该行为，以浏览器实际加载版本为准。
+扩展自 0.4.21 起会在本浏览器配置中记住连接开关：成功连接后，下次启动浏览器自动连接一次；点击 **Release browser and disconnect（释放浏览器并断开）** 后，重启仍保持关闭。弹窗显示下次启动是否连接。首次安装或旧版本没有记录时默认关闭，需要手动连接一次；普通后台 worker 唤醒或扩展重载不会触发自动连接。2026-11-10 已通过商店 API 确认 0.4.21 为 `PUBLISHED`，分发比例 100%；该版本包与扩展 ZIP 的验收见[0.4.21 记录](../common/history/release-0.4.21.md)，1.0.0 的构建与发布进度见[1.0.0 记录](../common/history/release-1.0.0.md)。已有安装版不会因 Python 包升级而获得扩展行为，以浏览器实际加载版本为准。
 
 本地桥异常退出时保留上次开启意图，当次显示连接错误、不循环重试；下次浏览器启动仍尝试一次。偏好保存失败会明确报错，释放仍撤销当次控制，但不能保证下次启动状态已保存。开关仅存于本配置，不同步到其他浏览器。实现使用 Chrome 的 [启动事件](https://developer.chrome.com/docs/extensions/reference/api/runtime#event-onStartup) 和 [本地扩展存储](https://developer.chrome.com/docs/extensions/reference/api/storage#storage-areas)。
 
@@ -76,7 +76,7 @@ saygo device screenshot --session browser-test
 
 默认使用发现的共享桥；指定目录时使用 `--bridge-directory`，WSL 必须传 Windows 目录对应的 WSL 路径，例如 `/mnt/c/Users/YOUR_USER/AppData/Local/Saygo/browser-bridge`。仅在 WSL 内注册 Linux host 无法连接 Windows Chrome。连接拒绝覆盖其他平台或其他桥的会话。
 
-首次连接仅在恰好一个网站标签页时自动选择，否则显式选页。页面身份包含浏览器会话 UUID 和 tab ID；Chrome 重启后不能把旧任务绑定到复用的数字 ID。`select-page` 和显式指定页面的连接会切换目标窗口中的活动标签页；当前源码不再主动聚焦或前置整个浏览器窗口，截图也不会改变窗口焦点。此修复包含在 0.4.21 扩展中，审核/分发状态见上述发布记录；Python 包升级不能替代浏览器实际加载新版扩展。
+首次连接仅在恰好一个网站标签页时自动选择，否则显式选页。页面身份包含浏览器会话 UUID 和 tab ID；Chrome 重启后不能把旧任务绑定到复用的数字 ID。1.0.0 的 `select-page` 和显式指定页面的连接只切换 Saygo 的控制目标，保留浏览器当前可见的活动标签和桌面前台应用；后续截图、输入仍作用于显式选中的页面。0.4.21 扩展虽已移除主动聚焦窗口的调用，但仍会激活标签；逻辑选页需要浏览器实际加载 1.0.0 扩展，Python 包升级不能替代扩展更新。发布状态见[1.0.0 记录](../common/history/release-1.0.0.md)。
 
 ## 后台截图与超时
 
@@ -111,13 +111,25 @@ saygo device select-page PAGE_ID --session browser-test
 saygo device close-page PAGE_ID --session browser-test
 ```
 
-new-page 仅接受 HTTP(S)，返回 `created_page_id`，保留原目标，需 select-page 切换。关闭选中页后须显式另选；即使无选中页也可建页。扩展建页返回时可能仍在加载，超时先检查页面列表再决定，不能盲目重复创建。禁止通过扩展关闭最后一个浏览器标签。
+new-page 仅接受 HTTP(S)，以非活动标签创建，返回 `created_page_id`，保留原控制目标和活动标签，需 select-page 切换控制目标。关闭选中页后须显式另选；即使无选中页也可建页。扩展建页返回时可能仍在加载，超时先检查页面列表再决定，不能盲目重复创建。禁止通过扩展关闭最后一个浏览器标签。
+
+普通网页链接需要在后台新标签打开时，先查询能力，再使用 `open_link_background`。按已授权的窄范围例外，驱动在隔离执行环境中按观察坐标命中节点，最多检查八层祖先，只读取普通 HTTP(S) 链接 URL，再在同窗口创建非活动标签；不向模型返回 DOM、控件树或链接文本。动作返回 `created_page_id`，原控制目标保持不变。例如：
+
+```sh
+saygo device act '{"type":"open_link_background","x":50,"y":40,"coordinate_space":"percent"}' \
+  --session browser-test --observation-id OBSERVATION_ID --request-id open-link-1
+saygo device pages --session browser-test
+saygo device select-page NEW_PAGE_ID --session browser-test
+saygo device screenshot --session browser-test
+```
+
+此动作和逻辑选页属于 1.0.0，需要匹配的 Python runtime 与扩展，发布状态见[1.0.0 记录](../common/history/release-1.0.0.md)。普通左键 `tap` 保留原语义：`target="_blank"` 或脚本弹窗可能触发 Chrome 原生前置。后台链接动作是独立 URL 导航，不执行点击处理器或保留 opener，也不承诺完整复制链接的 referrer/命名窗口语义；非链接、下载和非 HTTP(S) 链接明确拒绝。跨域 frame、Shadow DOM 和任意 JavaScript 弹窗尚未验收。不得自动重试为普通点击或事后抢回其他应用焦点；页面与结果仍须核验。
 
 工作流资源指定 `{"web":{"kind":"browser","session":"browser-test","backend":"extension"}}`。页面动作使用 `new_page/select_page/close_page`；后续步骤可引用 `{"$ref":"steps.create.created_page_id"}`。动作仍需新观察及持久意图，结果不明须人工核对。
 
 新标签/弹窗自动可发现但不替换已选目标。人工步骤让用户在原页面工作，之后显式 resume 并独立检查结果。见[扩展接管示例](../../examples/workflows/extension_handoff.json)和[工作流](../common/workflows.md)；示例 URL 检查只证明导航，不证明支付成功。
 
-扩展弹窗的 **Release browser and disconnect（释放浏览器并断开）** 由用户主动撤销控制并清空内存网络记录，不能撤销已派发动作。Chrome 调试器的 Cancel 会禁止该页，须用户断开后重连；当前源码还会关闭下次浏览器启动的自动连接，避免重启绕过取消。关闭普通标签页不改变连接开关。自动恢复只恢复浏览器桥，浏览器重启后原页面 ID 失效，仍须显式重新选页；不会自动重绑旧任务或重放操作。
+扩展弹窗的 **Release browser and disconnect（释放浏览器并断开）** 由用户主动撤销控制并清空内存网络记录，不能撤销已派发动作。Chrome 调试器的 Cancel 会禁止该页，须用户断开后重连；扩展自 0.4.21 起还会关闭下次浏览器启动的自动连接，避免重启绕过取消。关闭普通标签页不改变连接开关。自动恢复只恢复浏览器桥，浏览器重启后原页面 ID 失效，仍须显式重新选页；不会自动重绑旧任务或重放操作。
 
 CLI 退出只断开适配器，不关闭 Chrome；device stop 移除保存的扩展绑定，全局撤销访问仍通过扩展。超时、无效响应和握手错误不得关闭 native port，迟到回执按请求 ID 忽略。在途输入结束前拒绝第二次输入，但查询和截图可继续。普通 device 与任务共用资源锁，人工仍可能在观察和输入之间改变页面。
 

@@ -19,6 +19,21 @@ Use the same named session in CLI and MCP. `serial` in legacy tools is a session
 
 Query `device_command(command="capabilities", session=...)` or `saygo device capabilities --session ...` before relying on an optional action. Capabilities describe the backend; they do not prove the current application accepted input.
 
+For an ordinary visible hyperlink that should open in a new background tab, use
+`device_act(action={"type":"open_link_background","x":50,"y":40,"coordinate_space":"percent"}, ...)`
+when the capability is present. The driver reads only the ordinary HTTP(S) link
+URL at the observed coordinates in an isolated execution world and creates an
+inactive tab. It returns `created_page_id` and does not expose DOM or link text
+to the model. Explicitly select that page ID and observe
+it; selection changes the control binding without activating the visible tab.
+Use `new_page` for a known HTTP(S) URL. A normal left click on a `target="_blank"`
+link or a script-created popup can bring Chrome forward on macOS. The background
+link action opens the URL without executing click handlers or retaining opener
+relationships; it rejects non-links and download/non-HTTP(S) links. It does not
+apply to arbitrary buttons or JavaScript popup handlers. Do not substitute it
+for all clicks or retry a rejected request with a left click. If an older extension rejects the action, report that it needs
+the matching extension update rather than falling back to a foreground action.
+
 For a scrollable list or pane, choose a point inside that region and use `scroll_at` when supported. Use roughly half of the region's visible height for an initial probe when its scroll behavior is unknown. For continuous scanning, default to 85–90% of the visible region height per scroll, adjusting for row height to retain 1–2 rows of overlap; do not keep using half-screen steps after calibration. After each single scroll, inspect a fresh screenshot and compare a visible item or text landmark to measure actual movement and adjust the next amount. Reduce the amount after overshooting, or increase it moderately when movement was too small and more content remains. Near the target or list end, reduce to 10–20% of the region height; stop scrolling when the target is visible. If nothing moved, check the point, loading state and boundary before another action; do not blindly repeat or increase the amount.
 
 Browser `scroll_at` uses signed `amount`: positive up, negative down, and one unit requests 100 CSS pixels; fractional values are allowed. Estimate the pane height from its visible fraction of the observation's `screen_size`, not resized image pixels. A 600 CSS pixel pane suggests `amount=-3` for an initial downward probe, approximately `-5.1` to `-5.4` for continuous scanning if that retains 1–2 rows of overlap, and `-0.6` to `-1.2` near a target or list end. Confirm these units in capabilities; native desktop backends may use different units and require a small initial step to gauge movement. If `scroll_at` is unavailable, use supported scroll/swipe actions and reobserve each time. A timeout does not justify replaying input or disconnecting the browser plugin; only the user may actively disconnect it in the browser.

@@ -1,5 +1,6 @@
-// No DOM extraction or arbitrary page JavaScript execution.
 // CDP provides visual input/screenshots and passive network observation.
+// Only explicit background-link opening reads a URL at an observed coordinate,
+// inside an isolated world. No DOM/text is exposed and no arbitrary script is accepted.
 import {NetworkJournal} from './network.js';
 const network = new NetworkJournal((...args) => cdp(...args));
 const networkPaused = new Set();
@@ -416,8 +417,9 @@ async function execute(operation, args = {}, trace = {}) {
     return network.read(tabId, operation === 'network_read' ? args : {limit:1});
   }
   if (operation === "select") {
-    // Select the tab without stealing OS focus or restoring its window.
-    await chrome.tabs.update(tabId, {active:true});
+    // target() validates identity; the client persists the logical selection.
+    // Activating a tab can raise its browser on macOS even without windows.update.
+    // Keep the user's visible tab and desktop focus unchanged.
     return {};
   }
   if (operation === "close") {
@@ -427,7 +429,7 @@ async function execute(operation, args = {}, trace = {}) {
   if (operation === "metadata") {
     return (await pages()).find(p => p.page_id === args.page_id);
   }
-  const allowed = ["screenshot", "size", "tap", "hover", "double_click", "right_click", "long_press", "input", "key", "swipe", "scroll", "scroll_at", "navigate", "back", "forward"];
+  const allowed = ["screenshot", "size", "tap", "open_link_background", "hover", "double_click", "right_click", "long_press", "input", "key", "swipe", "scroll", "scroll_at", "navigate", "back", "forward"];
   if (!allowed.includes(operation)) throw new Error("Unsupported operation");
   trace.stage = "attach";
   await attach(tabId);
@@ -514,6 +516,59 @@ async function execute(operation, args = {}, trace = {}) {
     if (p.x >= v.clientWidth || p.y >= v.clientHeight) throw new Error("Input coordinates outside viewport");
     return p;
   };
+  if (operation === "open_link_background") {
+    // Narrow driver-only DOM exception: resolve the observed point to an anchor
+    // URL. Never return node data/text, run click handlers or infer other targets.
+    if (!captureDocuments.has(tabId)) captureDocuments.set(tabId, {});
+    const document = captureDocuments.get(tabId);
+    const before = await chrome.tabs.get(tabId);
+    const checkLink = async () => {
+      await target(args.page_id);
+      const current = await chrome.tabs.get(tabId);
+      if (trace.expired || ticket !== generation || captureDocuments.get(tabId) !== document ||
+          current.url !== before.url || current.pendingUrl !== before.pendingUrl || current.windowId !== before.windowId)
+        throw new Error("Link lookup expired or page/control changed; no tab created");
+    };
+    const p = await inputPoint(args.x, args.y);
+    await checkLink();
+    const group = `saygo-link-${ticket}-${trace.started}`;
+    let link;
+    try {
+      const hit = await command(tabId, "DOM.getNodeForLocation", {...p, includeUserAgentShadowDOM:false});
+      await checkLink();
+      const world = await command(tabId, "Page.createIsolatedWorld", {frameId:hit.frameId, worldName:"saygo-link-reader"});
+      await checkLink();
+      const node = await command(tabId, "DOM.resolveNode", {backendNodeId:hit.backendNodeId,
+        executionContextId:world.executionContextId, objectGroup:group});
+      await checkLink();
+      const result = await command(tabId, "Runtime.callFunctionOn", {objectId:node.object.objectId,
+        functionDeclaration:`function() {
+          if (!this.isConnected) return {error:'Hyperlink target changed; observe again'};
+          let node = this.nodeType === 1 ? this : this.parentElement;
+          for (let depth = 0; node && depth < 8; depth++, node = node.parentElement) {
+            if (node.localName === 'a' && node.namespaceURI === 'http://www.w3.org/1999/xhtml' && node.hasAttribute('href')) {
+              if (node.hasAttribute('download')) return {error:'Download links are not supported'};
+              return {url:node.href};
+            }
+          }
+          return {error:'No ordinary hyperlink at the selected coordinates'};
+        }`, returnByValue:true, userGesture:false});
+      if (result.exceptionDetails) throw new Error("Could not read hyperlink URL; no tab created");
+      link = result.result?.value;
+    } finally {
+      // Do not reattach after manual release merely to clean up remote handles.
+      if (ticket === generation && attached.has(tabId))
+        await cdp(tabId, "Runtime.releaseObjectGroup", {objectGroup:group}).catch(() => {});
+    }
+    if (link?.error) throw new Error(link.error);
+    let url;
+    try { url = new URL(link?.url); } catch { throw new Error("Link requires an absolute HTTP(S) URL"); }
+    if (!['http:', 'https:'].includes(url.protocol) || !url.hostname)
+      throw new Error("Only HTTP(S) hyperlink URLs are supported");
+    await checkLink();
+    const tab = await chrome.tabs.create({url:url.href, active:false, windowId:before.windowId});
+    return {page_id:`${args.page_id.slice(0, args.page_id.lastIndexOf(':'))}:${tab.id}`};
+  }
   if (operation === "tap") {
     const p = await inputPoint(args.x,args.y);
     await command(tabId,"Input.dispatchMouseEvent",{type:"mousePressed",button:"left",clickCount:1,...p});

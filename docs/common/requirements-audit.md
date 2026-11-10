@@ -73,7 +73,7 @@
 
 - `device sessions` 是保存记录，不做在线探活；MCP 的不可用后端列表也是策略判断。使用真实请求、截图和输入结果分别证明连接与操作。
 - 显式 workflow 默认 `.saygo_runs/runtime`；交互 task 默认 `$SAYGO_HOME_DIR/runtime`。都可配置 `SAYGO_RUNTIME_DIR`，但不能误称默认目录相同。
-- 扩展后台截图/普通视觉输入不前置目标，显式选页会激活标签/窗口；Playwright 截图会前置。
+- 1.0.0 扩展的后台截图和逻辑选页不前置目标；普通左键打开网页弹窗仍可能由 Chrome 前置。open_link_background 仅在驱动内部按坐标读普通链接 URL 后后台建页。逻辑选页与后台链接动作属于 1.0.0，实际安装与发布进度见[版本记录](history/release-1.0.0.md)；0.4.21 选页仍激活标签，Playwright 截图仍会前置。
 - macOS 后台有锁屏/当前控制台检查，Windows 不能未经独立核验继承该保证。
 - 滚动的半屏校准、重叠和接近目标缩小步长是操作指导与模型提示，不是所有驱动自动执行的算法。
 - Android WSL 本地无在线设备时会尝试 Windows worker 发现；普通 device 重连没有自动恢复 MJPEG，不能宣传每条命令都从帧流获取截图。

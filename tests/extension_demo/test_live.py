@@ -316,6 +316,9 @@ class ExtensionLive(unittest.TestCase):
                 cover: await chrome.windows.get(ids.cover)
             })''', {'target': target_window, 'cover': cover['id']})
 
+        def active_tabs():
+            return ui.evaluate('async () => (await chrome.tabs.query({active:true})).map(t => t.id).sort()')
+
         def desktop_order():
             if sys.platform != 'linux':
                 return None
@@ -336,23 +339,24 @@ class ExtensionLive(unittest.TestCase):
                 page.wait_for_timeout(100)
             page.wait_for_timeout(250)
             selections = [
-                ('select inactive tab', ['select-page', other_id], other_id, other_tab['id']),
-                ('select same tab again', ['select-page', other_id], other_id, other_tab['id']),
+                ('select inactive tab', ['select-page', other_id], other_id),
+                ('select same tab again', ['select-page', other_id], other_id),
                 ('connect with explicit page', ['connect', '--platform', 'browser', '--backend', 'extension',
-                                                '--page-id', platform.page_id], platform.page_id, target_tab),
+                                                '--page-id', platform.page_id], platform.page_id),
             ]
-            for label, arguments, selected_id, selected_tab in selections:
+            for label, arguments, selected_id in selections:
                 with self.subTest(selection=label):
                     before = window_state()
                     self.assertTrue(before['cover']['focused'])
                     self.assertFalse(before['target']['focused'])
                     order = desktop_order()
+                    active = active_tabs()
                     result = subprocess.run(command + arguments + ['--session', 'daily-web'], env=env,
                                             capture_output=True, text=True, timeout=45)
                     self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                     payload = json.loads(result.stdout)
                     self.assertEqual(payload.get('selected_page_id', payload.get('page_id')), selected_id)
-                    self.assertTrue(ui.evaluate('id => chrome.tabs.get(id)', selected_tab)['active'])
+                    self.assertEqual(active_tabs(), active, 'logical selection changed the visible tab')
                     after = window_state()
                     self.assertTrue(after['cover']['focused'], 'page selection stole the foreground window')
                     self.assertFalse(after['target']['focused'], 'target browser window was foregrounded')

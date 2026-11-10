@@ -115,6 +115,10 @@ class ExtensionBrowserPlatform(Platform):
     def right_click(self, x, y):
         self._call("right_click", x=x, y=y)
 
+    def open_link_background(self, x, y):
+        """Open the ordinary HTTP(S) anchor URL at a point without click handlers."""
+        return self._call("open_link_background", x=x, y=y)["page_id"]
+
     def long_press(self, x, y, duration=1):
         self._call("long_press", x=x, y=y, duration=duration)
 

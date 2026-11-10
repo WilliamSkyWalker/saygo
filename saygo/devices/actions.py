@@ -4,7 +4,7 @@ from pathlib import Path
 from . import observations
 
 BASE = {"tap", "swipe", "input", "press_key", "scroll_up", "scroll_down"}
-OPTIONAL = {"hover", "double_click", "right_click", "long_press", "scroll_at", "hotkey"}
+OPTIONAL = {"hover", "double_click", "right_click", "long_press", "scroll_at", "hotkey", "open_link_background"}
 
 
 def capabilities(platform):
@@ -44,7 +44,7 @@ def prepare(platform, action, observation=None):
         raise ValueError(f"Unsupported action: {kind}; query capabilities")
     w, h = platform.screen_size
     coordinates = []
-    if kind in {"tap", "hover", "double_click", "right_click", "long_press", "scroll_at"}:
+    if kind in {"tap", "hover", "double_click", "right_click", "long_press", "scroll_at", "open_link_background"}:
         coordinates = [("x", w), ("y", h)]
     elif kind == "swipe":
         coordinates = [("x1", w), ("y1", h), ("x2", w), ("y2", h)]
@@ -121,6 +121,10 @@ def dispatch(platform, action):
     kind = action["type"]
     if kind in {"hover", "double_click", "right_click"}:
         getattr(platform, kind)(action["x"], action["y"])
+    elif kind == "open_link_background":
+        page_id = platform.open_link_background(action["x"], action["y"])
+        return {"dispatched": True, "created_page_id": page_id,
+                "business_success": None, "requires_observation": True}
     elif kind == "long_press":
         platform.long_press(action["x"], action["y"], action["duration"])
     elif kind == "scroll_at":

@@ -269,7 +269,7 @@ BROWSER_HEADLESS / VIEWPORT_* / SELENIUM_GRID_URL ; FIGMA_TOKEN ; SKILLS_ENABLED
 ## 现有浏览器扩展后端
 
 
-`extensions/saygo-browser/` + `saygo/integrations/browser_bridge.py` + `platforms/browser_extension.py`：Native Messaging + 私有共享目录 IPC，Windows host 可与 WSL Saygo 通信，不监听网络端口。默认当前浏览器配置文件内所有 HTTP(S) 标签页（含新弹窗），操作目标仍显式选择；browser session UUID + tab ID 防重启误选；不提取 DOM。Runtime browser resource 必须写 `backend: extension`；先安装桥，再用 `device connect` 连接，见 `docs/browser-extension/README.md`。仅能声称已执行的平台测试，Windows/WSL 桥接、导航和截图已实机验证。测试：`tests/extension_demo`，可选 `SAYGO_TEST_CHROME`。
+`extensions/saygo-browser/` + `saygo/integrations/browser_bridge.py` + `platforms/browser_extension.py`：Native Messaging + 私有共享目录 IPC，Windows host 可与 WSL Saygo 通信，不监听网络端口。默认当前浏览器配置文件内所有 HTTP(S) 标签页（含新弹窗），操作目标仍显式选择；browser session UUID + tab ID 防重启误选。普通视觉决策不读取 DOM；显式 `open_link_background` 是用户授权的窄范围例外：仅在驱动隔离执行环境中按观察坐标命中节点、最多检查八层祖先读取普通链接 URL，再创建后台标签，不向模型提供 DOM、控件树或链接文本，不执行点击处理器。Runtime browser resource 必须写 `backend: extension`；先安装桥，再用 `device connect` 连接，见 `docs/browser-extension/README.md`。仅能声称已执行的平台测试，Windows/WSL 桥接、导航和截图已实机验证。测试：`tests/extension_demo`，可选 `SAYGO_TEST_CHROME`。
 
 ## 移动设备发现与模拟器安装
 
