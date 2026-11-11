@@ -34,8 +34,11 @@ def _execute(args):
     cmd = args.device_command
     serial = getattr(args, "serial", None)
 
-    def _shot(plat, out_path):
+    def _shot(plat, out_path, wait_result=None):
         from .observations import capture
+        if wait_result is not None:
+            from .observations import capture_after_wait
+            return capture_after_wait(plat, wait_result, serial, out_path, crop=args.crop)
         return capture(plat, serial, out_path, crop=args.crop)
 
     plat = None
@@ -127,8 +130,8 @@ def _execute(args):
         if cmd == "capabilities":
             return actions.capabilities(plat)
         if cmd == "wait":
-            result = observations.wait(plat, args.mode, args.timeout)
-            result["observation"] = _shot(plat, args.out)
+            result = observations.wait(plat, args.mode, args.timeout, session=serial)
+            result["observation"] = _shot(plat, args.out, wait_result=result)
             return result
         observation = None
         if cmd in INPUT_COMMANDS:
@@ -148,8 +151,8 @@ def _execute(args):
             result = actions.dispatch(plat, prepared)
             _record(args.record, "dispatched", result)
             if args.observe_after:
-                result["wait"] = observations.wait(plat, "stable", args.timeout)
-                after_observation = _shot(plat, args.out)
+                result["wait"] = observations.wait(plat, "stable", args.timeout, session=serial)
+                after_observation = _shot(plat, args.out, wait_result=result["wait"])
                 result["observation"] = after_observation
             return result
         if cmd not in {"screenshot", "focus"}:
@@ -180,8 +183,9 @@ def _execute(args):
             plat.tap(prepared['x'], prepared['y'])
             result = {"ok": True, "tapped": [args.x, args.y]}
             if args.out or args.observe_after:
-                observations.wait(plat, "stable", args.timeout)
-                result.update(_shot(plat, args.out))
+                waited = observations.wait(plat, "stable", args.timeout, session=serial)
+                after_observation = _shot(plat, args.out, wait_result=waited)
+                result.update(after_observation)
                 result["requires_observation"] = True
             return (result)
         elif cmd == "swipe":
@@ -244,13 +248,13 @@ def _execute(args):
         error = {"ok": False, "error": str(exc), "error_type": type(exc).__name__,
                  "outcome": "uncertain" if dispatched else "not_dispatched",
                  "requires_observation": dispatched}
+        error.update(_observation_recovery(exc))
         if isinstance(getattr(exc, 'setup', None), dict):
             error['setup'] = exc.setup
         from .diagnostics import collect
         error["diagnostics"] = collect(plat, exc)
         if cmd == "type-send":
             error["submission_attempted"] = submission_attempted
-            error["requires_observation"] = dispatched
         return error
     finally:
         try:
@@ -266,6 +270,18 @@ def _execute(args):
                     _record(args.record, "observation_failed", {"error": str(exc)})
         finally:
             ds.release_controller(plat)
+
+
+def _observation_recovery(error):
+    """Preserve a rejected action's existing evidence without another capture."""
+    if getattr(error, 'requires_observation', False) is not True:
+        return {}
+    result = {'requires_observation': True}
+    for field in ('observation', 'visual_change'):
+        value = getattr(error, field, None)
+        if isinstance(value, dict):
+            result[field] = value
+    return result
 
 
 def _page_evidence(platform, session, record, phase):
@@ -386,6 +402,7 @@ def execute_observed(platform, session, action, observation, keys, *, request_id
             result = {'ok': False, 'error': str(exc), 'error_type': type(exc).__name__,
                       'outcome': 'uncertain' if dispatched else 'not_dispatched',
                       'requires_observation': dispatched}
+            result.update(_observation_recovery(exc))
         if dispatched:
             try:
                 result['observation'] = observations.capture(platform, session)

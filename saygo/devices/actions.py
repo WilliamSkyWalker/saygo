@@ -90,14 +90,32 @@ def prepare(platform, action, observation=None):
     if observation:
         import time
         if time.time() - observation.get("at", time.time()) > observations.MAX_AGE_SECONDS:
-            raise ValueError(f"Observation expired; observe again (maximum age {observations.MAX_AGE_SECONDS}s)")
+            raise observations.ObservationChangedError(f"Observation expired; observe again (maximum age {observations.MAX_AGE_SECONDS}s)")
         current = platform.screenshot_raw()
+        captured_at = time.time()
         meta = observations.metadata(platform, current, observation.get("session"))
-        if any(meta.get(k) != observation.get(k) for k in ("screen_size", "page_id", "url", "target", "window_id", "process_id", "window_bounds")):
-            raise ValueError("Target changed; observe and locate again")
+
+        def reject(message, change=None):
+            try:
+                evidence = observations.save(platform, current, observation.get('session'),
+                                             description=meta, captured_at=captured_at)
+            except OSError as exc:
+                # Retain the guard's recovery semantics even when disk is full.
+                raise observations.ObservationChangedError(message, visual_change=change) from exc
+            raise observations.ObservationChangedError(message, evidence, change)
+
+        if any(meta.get(k) != observation.get(k) for k in observations.IDENTITY_FIELDS):
+            reject("Target changed; observe and locate again")
         before = Path(observation.get("source_path", observation["path"])).read_bytes()
-        if observations.change_fraction(before, current) > .002:
-            raise ValueError("Screen changed; observe and locate again")
+        change = observations.describe_change(before, current)
+        if change['change_fraction'] > .002:
+            single_point = kind in {'tap', 'hover', 'double_click', 'right_click', 'long_press',
+                                    'scroll_at', 'open_link_background'}
+            known_phase = (getattr(platform, 'platform_name', None) == 'browser' and single_point
+                           and observations.known_local_phase(observation, current, change, action['x'], action['y']))
+            if not known_phase:
+                reject("Screen changed; observe and locate again", change)
+            action['visual_validation'] = dict(change, known_local_phase=True)
         # Even a small change near the target invalidates its location.
         if coordinates:
             from PIL import Image
@@ -108,7 +126,7 @@ def prepare(platform, action, observation=None):
                     x, y = action[coordinates[index][0]] * sx, action[coordinates[index + 1][0]] * sy
                     region = (max(0, int(x - 24)), max(0, int(y - 24)), min(im.width, int(x + 25)), min(im.height, int(y + 25)))
                     if observations.change_fraction(before, current, region) > .002:
-                        raise ValueError("Target region changed; observe and locate again")
+                        reject("Target region changed; observe and locate again", change)
     if observation and observation.get("window_id") is not None and callable(getattr(type(platform), "expect_window", None)):
         platform.expect_window(observation)
     for name, _ in coordinates:
