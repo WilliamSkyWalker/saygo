@@ -1,8 +1,9 @@
 # Saygo 1.0.1：局部画面变化保护与升级选择
 
-本次仅发布 Python runtime 和随包分发的客户端插件，版本为 1.0.1。
+Python runtime 和随包分发的客户端插件已发布至
+[PyPI 1.0.1](https://pypi.org/project/saygo-agent-control/1.0.1/)，公开 wheel/sdist 已核对下载与 SHA256。
 浏览器扩展保持 1.0.0，协议保持不变；不提交新的商店版本或构建原生桌面包。
-发布准备、验证和公开索引核对见 [1.0.1 记录](history/release-1.0.1.md)。
+发布、验证和公开索引核对见 [1.0.1 记录](history/release-1.0.1.md)。
 
 ## 行为变化
 

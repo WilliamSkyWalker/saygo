@@ -43,7 +43,26 @@
 
 ## 发布状态
 
-准备中。采用非 `v*` 的 `pypi-1.0.1` 标签固定源码，并通过已有 Python package
-工作流的 `workflow_dispatch` / `publish=pypi` 发布。这样不会触发 `v*` 对应的
-GitHub Release 和 Chrome Web Store 自动提交。云端只构建/发布，不重新加入已移除的云测试。
-发布后分别核对远端提交、固定标签、工作流结果、公开 wheel/sdist 与 SHA256。
+2026-11-11 08:16 UTC 已核实 [PyPI 1.0.1](https://pypi.org/project/saygo-agent-control/1.0.1/)
+公开可用。源码修复提交为 `659f779` 和 `96ce2ac`，发行提交为
+`75b324fb9a2d915a948bdd203dd75a3a97907065`，均已推送 `main`。
+非 `v*` 的注解标签 `pypi-1.0.1` 固定在该发行提交；远端标签对象为
+`60368a6a24f5ed17a3a64a14290ea24a57de9aaa`，已核对其解析后的提交。
+
+已有 Python package 工作流通过 `workflow_dispatch` / `publish=pypi` 发布；
+[运行 42985133473](https://github.com/WilliamSkyWalker/saygo/actions/runs/42985133473)
+的 build、publish 均成功。云端只构建和发布，工作流成功不代表测试通过。
+未创建 `v1.0.1`，未触发 GitHub Release、Chrome Web Store 提交或桌面包发布。
+
+PyPI 版本 JSON 中两个文件均未 yank；公开下载的文件大小及 SHA256 与索引一致：
+
+| 文件 | 字节数 | SHA256 |
+| --- | ---: | --- |
+| `saygo_agent_control-1.0.1-py3-none-any.whl` | 1,143,882 | `9fc58914b040467fa69baf4e66cd31ca27f259426bc56b62b6927b75b6be4036` |
+| `saygo_agent_control-1.0.1.tar.gz` | 617,697 | `f479a7ccd74756fbdd321386110ccb11b6506eb5e6e5867c2e385889ce8a8a6a` |
+
+两个公开包各有 113 个 `saygo/` Python 源文件，与发行检出内容在统一 CRLF/LF
+后完全一致；wheel 内嵌发行元数据、两种插件 manifest、扩展 manifest 和操作 Skill
+也已逐项核对。上面的干净安装与重复 setup 证据来自本地构建的 wheel，
+没有将公开下载核对描述为另一次安装验收，也不声称本地与云端压缩包字节一致。
+此次发布未升级用户安装，未重载扩展或结束在线 native host。
