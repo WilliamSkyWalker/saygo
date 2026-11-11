@@ -669,8 +669,13 @@ def setup_simulator(name: str | None = None,
 # ──────────────────────────────────────────────────────────────────
 
 def _device(command, serial=None, **options):
-    from saygo.devices.service import execute
+    from saygo.devices.service import execute, MUTATING_COMMANDS
+    from . import update_policy
     from .backend_policy import check, UnsupportedBackendError
+    if command == 'update-status':
+        return {'ok': True, 'updates': update_policy.status()}
+    if command == 'update-decision':
+        return update_policy.decide(options.get('decision'), options.get('version'))
     try:
         check(serial, options.get('backend'))
     except UnsupportedBackendError as exc:
@@ -680,7 +685,9 @@ def _device(command, serial=None, **options):
         from saygo.platforms import device_session as ds
         options['backend'] = (ds.load_state(serial) or {}).get('browser_backend', 'extension')
     with _silenced_stdout():
-        return execute(command, serial, **options)
+        hooks = {'preflight': update_policy.before_action} if command in MUTATING_COMMANDS - {'stop'} else {}
+        result = execute(command, serial, **hooks, **options)
+    return update_policy.decorate(result)
 
 
 @mcp.tool()
@@ -692,9 +699,10 @@ def device_sessions() -> dict:
                 for row in rows if row.get('backend') == 'playwright']
     result = {"sessions": [row for row in rows if row.get('backend') != 'playwright'],
               "unavailable_sessions": excluded}
-    if os.environ.get('SAYGO_INSTALL_ROOT'):
-        from saygo.updates import notice
-        result['updates'] = notice(os.environ['SAYGO_INSTALL_ROOT'])
+    from .update_policy import status
+    info = status()
+    if info is not None:
+        result['updates'] = info
     return result
 
 
@@ -703,7 +711,9 @@ def device_command(command: str, session: str, options: dict | None = None) -> d
     """Shared CLI commands: start, stop, pages, select-page, new-page, close-page,
     open, navigate, capabilities, diagnose, wait, operations, resolve. Input requires observation_id;
     request_id deduplicates retries. Resolve requires request_id, resolution and note.
-    Use device_connect for a new binding.
+    Use device_connect for a new binding. update-status returns update/check status;
+    update-decision records the user's explicit upgrade/continue choice with options
+    {decision, version}. Ask the user first; never choose on their behalf.
     Playwright is not supported through MCP; use a browser extension session.
     """
     return _device(command, session, **(options or {}))
@@ -718,6 +728,10 @@ def device_connect(platform: str, session: str, options: dict | None = None) -> 
     """
     from argparse import Namespace
     from saygo.devices.control import connect
+    from . import update_policy
+    blocked = update_policy.before_action()
+    if blocked:
+        return blocked
     defaults = dict(device=None, server_url=None, team_id=None, app=None, backend=None,
                     bridge_directory=None, page_id=None)
     defaults.update(options or {})
@@ -730,7 +744,8 @@ def device_connect(platform: str, session: str, options: dict | None = None) -> 
             from saygo.platforms import device_session as ds
             defaults['backend'] = (ds.load_state(session) or {}).get('browser_backend', 'extension')
         with _silenced_stdout():
-            return connect(Namespace(platform=platform, session=session, **defaults))
+            result = connect(Namespace(platform=platform, session=session, **defaults))
+        return update_policy.decorate(result)
     except Exception as exc:
         from saygo.devices.android_setup import error_payload
         return error_payload(exc)
@@ -868,11 +883,14 @@ def agent_task(command: str, task_id: str | None = None, options: dict | None = 
     Requests are never replayed automatically. needs_review requires evidence and explicit resolution.
     """
     from saygo.runtime.interactive import call
+    from . import update_policy
     try:
         from .backend_policy import check_task
         check_task(command, task_id, options or {})
         with _silenced_stdout():
-            result = call(command, task_id, **(options or {}))
+            hooks = {'preflight': update_policy.before_action} if command == 'submit' else {}
+            result = call(command, task_id, **hooks, **(options or {}))
+        result = update_policy.decorate(result)
         if command in {"observe", "submit", "resume", "recover"}:
             observed = result.get("observations", {})
             resource = (options or {}).get("resource")

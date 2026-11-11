@@ -135,7 +135,7 @@ class InteractiveRuntime(Runtime):
                 'business_success': None, 'requires_observation': True})
             return state
 
-    def submit(self, run_id, resource, action, observation_id, request_id, note=None):
+    def submit(self, run_id, resource, action, observation_id, request_id, note=None, *, preflight=None):
         if not isinstance(request_id, str) or not request_id.strip():
             raise ValueError("request_id is required to prevent accidental duplicate input")
         with self._task(run_id) as state:
@@ -145,6 +145,10 @@ class InteractiveRuntime(Runtime):
                 if previous["request"] != request:
                     raise ValueError("request_id was already used for different input")
                 return state  # Never redispatch an accepted request, even after a crash.
+            if preflight is not None:
+                blocked = preflight()
+                if blocked is not None:
+                    return blocked
             if state["status"] != "idle":
                 raise ValueError(f"Task is {state['status']}; recover, resolve or resume before submitting")
             observation = state["observations"].get(resource)
@@ -296,7 +300,7 @@ class InteractiveRuntime(Runtime):
             return {"path": str(path)}
 
 
-def call(command, task_id=None, **options):
+def call(command, task_id=None, *, preflight=None, **options):
     runtime = InteractiveRuntime(default_store())
     if command == "list":
         with runtime.store.connect() as db:
@@ -318,7 +322,7 @@ def call(command, task_id=None, **options):
     if command == "repair":
         return runtime.repair_resource(task_id, **options)
     if command == "submit":
-        return runtime.submit(task_id, **options)
+        return runtime.submit(task_id, preflight=preflight, **options)
     if command == "recover":
         return runtime.recover_task(task_id)
     if command == "resolve":

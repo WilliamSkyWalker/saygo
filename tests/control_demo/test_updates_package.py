@@ -39,6 +39,12 @@ class PackageUpdateTests(unittest.TestCase):
 
     def join_worker(self):
         self.release.set()
+        policy=sys.modules.get('saygo.mcp.update_policy')
+        if policy:
+            with policy._LOCK:
+                state=policy._STATES.get(str(self.root))
+                worker=state.get('worker') if state else None
+            if worker: worker.join(3); self.assertFalse(worker.is_alive())
         with u._CHECK_THREADS_LOCK: worker=u._CHECK_THREADS.get(str(self.root))
         if worker: worker.join(3); self.assertFalse(worker.is_alive())
 

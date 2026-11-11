@@ -102,7 +102,9 @@ py -3 install-saygo.py
 | 源码开发 | 项目仓库 | 开发者更新代码与依赖，不切换托管指针 |
 | 桌面应用 | 对应发布归档 | 手动下载，当前没有桌面自动更新 |
 
-包模式每次 MCP 启动后台检查，device_sessions 也在缓存缺失、损坏、过期（24 小时）或版本不匹配时触发。首次可返回 `checking: true`，之后返回版本、链接、pipx 命令与重启提示。检查不阻塞 MCP、不写 stdout，同进程共用 worker，缓存原子写入。失败可保留已知新版并携带 error，checked_at 只是最近尝试时间。
+包模式每次 MCP 启动后台检查；设备工具和交互任务在本次 MCP 进程首次使用时也异步强制刷新一次，避免旧启动器和近期旧缓存漏掉新版本。之后使用 24 小时版本缓存，不在每次动作中联网。版本读取与网络检查均在后台线程进行；首次可返回 `checking: true`，之后返回版本、链接、pipx 命令与重启提示。检查不阻塞 MCP、不写 stdout，同进程共用 worker，缓存原子写入。失败可保留已知新版并携带 error，checked_at 只是最近尝试时间。
+
+发现可用更新后，工具返回 `updates.requires_user_decision: true`；Agent 必须暂停后续业务动作，询问用户现在升级还是本次继续，不能只转述通知后继续操作。`device_command` 的 `update-decision` 命令接收 `options={"decision":"continue"或"upgrade","version":"提示中的版本"}`：continue 仅允许本次 MCP 进程继续，重启后重新检查；upgrade 保持业务输入暂停并给出升级说明，不执行安装、不重载扩展。新输入在派发前被门禁拦截，已有请求结果仍可查询，观察、诊断、人工核对/resolve、handoff 和任务取消保持可用。网络失败且没有已知新版时不拦截业务。`update-status` 可读取最新检查及选择状态。
 
 `saygo update` 或 `saygo update --check` 强制包模式查询；`--auto off` 保持只提醒，`--apply/--auto on` 及托管通道选择会被拒绝并提示 pipx。升级后缓存按实际包版本比较，不再提醒同版/旧版。包检查不查询用户自定义 pip 索引。
 

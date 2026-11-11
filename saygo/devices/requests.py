@@ -54,7 +54,7 @@ def review_owner(keys):
     return None
 
 
-def run(session, request_id, payload, keys, callback):
+def run(session, request_id, payload, keys, callback, *, before_dispatch=None):
     request_id = uuid.uuid4().hex if request_id is None else request_id
     operation_id = identity(session, request_id)
     owner = 'operation:' + operation_id
@@ -74,6 +74,10 @@ def run(session, request_id, payload, keys, callback):
             if row[2] or result.get('outcome') != 'uncertain':
                 release(owner)
             return result
+        if before_dispatch is not None:
+            decision = before_dispatch()
+            if decision is not None:
+                return decision
         started = time.time()
         with store.connect() as db:
             db.execute('INSERT INTO device_requests VALUES (?,?,?,?,?,?,NULL,NULL)',

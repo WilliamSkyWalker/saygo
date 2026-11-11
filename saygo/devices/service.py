@@ -327,7 +327,7 @@ def _record(path, kind, data):
             os.fsync(stream.fileno())
 
 
-def execute(command, session=None, **options):
+def execute(command, session=None, *, preflight=None, **options):
     import uuid
     from saygo.platforms import device_session as ds
     from saygo.runtime.locking import resource_guard, session_keys
@@ -361,7 +361,8 @@ def execute(command, session=None, **options):
             return result
         if command in MUTATING_COMMANDS:
             request_id = options.pop('request_id', None)
-            return requests.run(session, request_id, {'command': command, 'options': {**REQUEST_DEFAULTS, **options}}, keys, perform)
+            return requests.run(session, request_id, {'command': command, 'options': {**REQUEST_DEFAULTS, **options}},
+                                keys, perform, before_dispatch=preflight)
         with resource_guard(keys, owner=requests.review_owner(keys)):
             return perform(uuid.uuid4().hex)
     except Exception as exc:
