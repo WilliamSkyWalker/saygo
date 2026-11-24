@@ -27,12 +27,12 @@
 
 | 现有基础 | 代码或文档 | 本需求中的作用 |
 | --- | --- | --- |
-| 共享设备操作、观察检查及输入记录 | [devices/service.py](saygo/devices/service.py)、[qa/control.py](saygo/qa/control.py) | 新能力继续复用执行边界。 |
-| 交互任务、持久化、人工接管与不确定结果处理 | [runtime/interactive.py](saygo/runtime/interactive.py)、[runtime/store.py](saygo/runtime/store.py) | 保留现有任务恢复和资源归属语义。 |
-| 桌面视觉决策循环 | [desktop/runner.py](saygo/desktop/runner.py) | 作为自有 Agent 核心演进的起点。 |
-| QA 规划、逐步操作及断言 | [qa/agent.py](saygo/qa/agent.py)、[qa/brain.py](saygo/qa/brain.py) | 接入操作经验，保留测试判定语义。 |
-| MCP 图像与动作接口 | [mcp/server.py](saygo/mcp/server.py) | 需支持先本地匹配，再决定是否返回图像。 |
-| 稳定帧和像素差处理 | [vision/settle.py](saygo/vision/settle.py)、[性能说明](docs/common/performance.md) | 可复用部分图像处理基础；现有阈值不能直接当作动作复用条件。 |
+| 共享设备操作、观察检查及输入记录 | [devices/service.py](../saygo/devices/service.py)、[qa/control.py](../saygo/qa/control.py) | 新能力继续复用执行边界。 |
+| 交互任务、持久化、人工接管与不确定结果处理 | [runtime/interactive.py](../saygo/runtime/interactive.py)、[runtime/store.py](../saygo/runtime/store.py) | 保留现有任务恢复和资源归属语义。 |
+| 桌面视觉决策循环 | [desktop/runner.py](../saygo/desktop/runner.py) | 作为自有 Agent 核心演进的起点。 |
+| QA 规划、逐步操作及断言 | [qa/agent.py](../saygo/qa/agent.py)、[qa/brain.py](../saygo/qa/brain.py) | 接入操作经验，保留测试判定语义。 |
+| MCP 图像与动作接口 | [mcp/server.py](../saygo/mcp/server.py) | 需支持先本地匹配，再决定是否返回图像。 |
+| 稳定帧和像素差处理 | [vision/settle.py](../saygo/vision/settle.py)、[性能说明](../docs/common/performance.md) | 可复用部分图像处理基础；现有阈值不能直接当作动作复用条件。 |
 
 本轮尚未发现完整的视觉动作知识库、可执行经验学习与复用服务，也未验证完整个人通用 Agent 产品或知识云同步能力。
 
