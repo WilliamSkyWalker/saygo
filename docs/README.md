@@ -83,6 +83,8 @@ pipx upgrade saygo-agent-control
 
 ### 开发、测试与维护
 
+[排期功能](../doc-todo/README.md)收录待开发功能的设计与验收场景。
+
 开发前阅读 [AGENTS.md](../AGENTS.md)；项目隔离安装见[安装指南](common/installation.md)。按修改范围运行[测试与验收](common/testing/README.md)中的检查，Python 核心离线测试入口为：
 
 ```sh
@@ -171,6 +173,8 @@ The desktop app and QA send screenshots and task or test-case content to the con
 While connected, the browser extension records HTTP, WebSocket, and SSE traffic from website tabs in the current browser profile by default, including available bodies and headers. These records may contain cookies, tokens, or personal information. Records are held in extension memory by default; queries and exports pass data to the caller. Review evidence before sharing it. See the [extension privacy notice](browser-extension/privacy.md).
 
 ### Development, testing, and maintenance
+
+[Planned features](../doc-todo/README.md) lists proposed designs and their acceptance scenarios.
 
 Read [AGENTS.md](../AGENTS.md) before making changes. The [installation guide](common/installation.md) covers an isolated development setup. Select checks from the [testing guide](common/testing/README.md) according to the change. To run the offline Python core suites:
 
